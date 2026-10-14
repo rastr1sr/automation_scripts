@@ -1,0 +1,54 @@
+---
+# Motorola moto g82 5G (rhodep), SM6375 / Snapdragon 695
+# based on: roles/axp/common_init_device/vars/copytemplate.yml v2.8
+
+# human readable model name
+target_model_vendor: "Motorola"
+target_model_name: 'moto g82 5G'
+target_model_full: "{{ target_model_vendor }} {{ target_model_name }}"
+
+# path to the kernel dir (lineage-22.2: android_kernel_motorola_sm6375, 5.4)
+target_kernel_dir: kernel/motorola/sm6375
+
+# common tree; it also holds common.mk, which gets the vendor/axp inherit
+target_model_common_tree: android_device_motorola_sm6375-common
+target_model_device_tree: android_device_motorola_rhodep
+target_model_device_tree_mk: common.mk
+
+# kernel already ships drivers/net/wireguard
+skip_wireguard: true
+
+# boot debugger: /metadata is ext4, writable, first_stage_mount (fstab.qcom)
+extendrom_debug_path_default: /metadata
+extendrom_debug_path_size_full_default: 500
+extendrom_debug_path_size_kernel_default: 100
+extendrom_debug_path_size_selinux_default: 200
+extendrom_debug_path_size_crash_default: 200
+
+# git push
+axp_git_push_device_include: "{{ target_model_device_tree }}|{{ target_model_common_tree }}"
+axp_git_push_vendor_include: "proprietary_vendor_motorola_rhodep|proprietary_vendor_motorola_sm6375-common"
+
+#################################################################################################################################
+## Website info
+#
+hugo_firmware: "manual"   # no Moto OTA in vendor_firmware: users must flash the latest stock A13 first
+hugo_isab: 'yes'          # virtual A/B, launch_with_vendor_ramdisk
+
+#### PRO block ####
+android_version_pro: 15
+hugo_relockable_pro: 'no' # unverified: Motorola has no documented avb_custom_key path; test before claiming 'yes'
+hugo_encryption_pro: "FBEv2" # fstab.qcom: fileencryption=...:v2 + metadata_encryption
+hugo_supportlevel_pro: "community"
+hugo_first_releasedate_pro: "TBD"
+hugo_state_pro: "!! ALPHA !!"
+axp_bootloader_id_pro: ''
+
+#### SLIM block ####
+android_version_slim: 15
+hugo_relockable_slim: 'no'
+hugo_encryption_slim: "FBEv2"
+hugo_supportlevel_slim: "community"
+hugo_first_releasedate_slim: "TBD"
+hugo_state_slim: "!! ALPHA !!"
+axp_bootloader_id_slim: ''

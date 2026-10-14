@@ -8,3 +8,7 @@
     backrefs: true
   when:
       - axp_allow_permissive is defined and axp_allow_permissive | bool
+
+- name: "A15: compensate lineage-22.2 drift (AXP fork)"
+  ansible.builtin.include_tasks: a15_lineage_drift.yml
+  when: android_shortversion == "a15"

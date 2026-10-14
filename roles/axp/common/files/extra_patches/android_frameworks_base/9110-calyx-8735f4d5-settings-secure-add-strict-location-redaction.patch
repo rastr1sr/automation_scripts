@@ -1,0 +1,62 @@
+From 8735f4d5d5430a5b12a52f2fd36c2b2100c5d0e8 Mon Sep 17 00:00:00 2001
+From: Tommy Webb <tommy@calyxinstitute.org>
+Date: Mon, 24 Jun 2024 17:28:28 +0000
+Subject: [PATCH] Settings.Secure: Add STRICT_LOCATION_REDACTION
+
+Issue: calyxos#2468
+Change-Id: Ic6bb59a32fe9441ecc8488c97c80e1ecbb51d5a1
+---
+ core/java/android/provider/Settings.java              | 11 +++++++++++
+ .../provider/settings/backup/SecureSettings.java      |  1 +
+ .../settings/validators/SecureSettingsValidators.java |  1 +
+ 3 files changed, 13 insertions(+)
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 3ebb099e8e3a..ffc5b860e88f 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -12897,6 +12897,17 @@ public final class Settings {
+         @Readable
+         public static final String STYLUS_POINTER_ICON_ENABLED = "stylus_pointer_icon_enabled";
+ 
++        /**
++         * Prohibit apps without MANAGE_EXTERNAL_STORAGE or MANAGE_MEDIA from accessing
++         * location metadata in files, regardless of how such files are accessed or shared.
++         * A nonexistent value will be treated as enabled.
++         *
++         * Type: int (0 to disable, 1 to enable)
++         *
++         * @hide
++         */
++        public static final String STRICT_LOCATION_REDACTION = "strict_location_redaction";
++
+         /**
+          * These entries are considered common between the personal and the managed profile,
+          * since the managed profile doesn't get to change them.
+diff --git a/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java b/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java
+index 4f479854675e..5505dd0aee34 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java
++++ b/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java
+@@ -287,6 +287,7 @@ public class SecureSettings {
+         Settings.Secure.MANDATORY_BIOMETRICS,
+         Settings.Secure.MANDATORY_BIOMETRICS_REQUIREMENTS_SATISFIED,
+         Settings.Secure.TETHERING_ALLOW_VPN_UPSTREAMS,
++        Settings.Secure.STRICT_LOCATION_REDACTION,
+         Settings.Secure.ADVANCED_PROTECTION_MODE,
+         Settings.Secure.ACCESSIBILITY_KEY_GESTURE_TARGETS,
+     };
+diff --git a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+index 13a8f740c179..3f3b3a21fed6 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
++++ b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+@@ -451,6 +451,7 @@ public class SecureSettingsValidators {
+         VALIDATORS.put(Secure.MANDATORY_BIOMETRICS_REQUIREMENTS_SATISFIED,
+                 new InclusiveIntegerRangeValidator(0, 1));
+         VALIDATORS.put(Secure.TETHERING_ALLOW_VPN_UPSTREAMS, BOOLEAN_VALIDATOR);
++        VALIDATORS.put(Secure.STRICT_LOCATION_REDACTION, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(Secure.ADVANCED_PROTECTION_MODE, BOOLEAN_VALIDATOR);
+     }
+ }
+-- 
+GitLab
+

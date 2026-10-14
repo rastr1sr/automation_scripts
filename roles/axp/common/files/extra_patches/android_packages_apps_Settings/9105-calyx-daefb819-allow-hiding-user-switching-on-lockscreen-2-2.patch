@@ -1,0 +1,369 @@
+From daefb81909fd0f285696eb1e0b02e40d1f56a64c Mon Sep 17 00:00:00 2001
+From: Tommy Webb <tommy@calyxinstitute.org>
+Date: Mon, 4 Nov 2024 21:25:13 +0000
+Subject: [PATCH] Allow hiding user switching on lockscreen (2/2)
+
+Also disable the preference to "Add users from lock screen" when
+switcher is hidden, as adding users is not available then.
+
+Issue: calyxos#1373
+Change-Id: I83fb76a494b1f35c9fd66605fae64710b5aa37b7
+---
+ res/values/calyx_strings.xml                  |  8 ++
+ res/xml/user_settings.xml                     | 15 +++-
+ ...AddUserWhenLockedPreferenceController.java | 60 ++++++++++++-
+ ...tchUserWhenLockedPreferenceController.java | 88 +++++++++++++++++++
+ .../android/settings/users/UserSettings.java  | 13 ++-
+ ...serWhenLockedPreferenceControllerTest.java |  8 +-
+ 6 files changed, 182 insertions(+), 10 deletions(-)
+ create mode 100644 src/com/android/settings/users/SwitchUserWhenLockedPreferenceController.java
+
+diff --git a/res/values/calyx_strings.xml b/res/values/calyx_strings.xml
+index 0dd07a6ab8b..d32fb801f1f 100644
+--- a/res/values/calyx_strings.xml
++++ b/res/values/calyx_strings.xml
+@@ -165,4 +165,12 @@
+ 
+     <!-- Summary for the private space setup education screen. [CHAR LIMIT=NONE] -->
+     <string name="private_space_hide_apps_summary_calyx">Hide or lock private apps in a separate space.</string>
++
++    <!-- User settings item to allow switching users from lock screen [CHAR LIMIT=50] -->
++    <string name="user_switch_on_lockscreen">Switch users from lock screen</string>
++    <!-- Summary of preference to allow switching users from lock screen [CHAR LIMIT=NONE] -->
++    <string name="user_switch_on_lockscreen_summary">Allow switching when this user is locked</string>
++
++    <!-- Summary of disabled preference - when user switcher is off - for allow adding users from lock screen [CHAR LIMIT=NONE] -->
++    <string name="user_add_on_lockscreen_menu_summary_no_switcher">User switcher is needed to add users from lock screen</string>
+ </resources>
+diff --git a/res/xml/user_settings.xml b/res/xml/user_settings.xml
+index 59217226592..4e997b10f0e 100644
+--- a/res/xml/user_settings.xml
++++ b/res/xml/user_settings.xml
+@@ -86,18 +86,25 @@
+         android:singleLineTitle="false"
+         android:order="65"/>
+ 
++    <com.android.settingslib.RestrictedSwitchPreference
++        android:key="user_settings_switch_users_when_locked"
++        android:title="@string/user_switch_on_lockscreen"
++        android:summary="@string/user_switch_on_lockscreen_summary"
++        android:singleLineTitle="false"
++        android:order="105"
++        settings:allowDividerAbove="true"
++        settings:controller="com.android.settings.users.SwitchUserWhenLockedPreferenceController"/>
++
+     <com.android.settingslib.RestrictedSwitchPreference
+         android:key="user_settings_add_users_when_locked"
+         android:title="@string/user_add_on_lockscreen_menu"
+         android:singleLineTitle="false"
+-        android:order="105"
+-        settings:allowDividerAbove="true"/>
++        android:order="106"/>
+ 
+     <com.android.settingslib.RestrictedPreference
+         android:key="timeout_to_dock_user_preference"
+         android:title="@string/switch_to_dock_user_when_docked"
+-        android:order="106"
++        android:order="107"
+         android:fragment="com.android.settings.users.TimeoutToDockUserSettings"
+         settings:controller="com.android.settings.users.TimeoutToDockUserPreferenceController"/>
+-
+ </PreferenceScreen>
+diff --git a/src/com/android/settings/users/AddUserWhenLockedPreferenceController.java b/src/com/android/settings/users/AddUserWhenLockedPreferenceController.java
+index 2dc5b2d60d6..81ca25f0878 100644
+--- a/src/com/android/settings/users/AddUserWhenLockedPreferenceController.java
++++ b/src/com/android/settings/users/AddUserWhenLockedPreferenceController.java
+@@ -16,21 +16,46 @@
+ package com.android.settings.users;
+ 
+ import android.content.Context;
++import android.database.ContentObserver;
++import android.net.Uri;
++import android.os.Handler;
++import android.os.Looper;
+ import android.provider.Settings;
+ 
+ import androidx.preference.Preference;
++import androidx.preference.PreferenceScreen;
+ 
+ import com.android.settings.R;
+ import com.android.settings.core.TogglePreferenceController;
+ import com.android.settingslib.RestrictedSwitchPreference;
+ 
+-public class AddUserWhenLockedPreferenceController extends TogglePreferenceController {
++import androidx.lifecycle.Lifecycle;
++import androidx.lifecycle.LifecycleObserver;
++import androidx.lifecycle.OnLifecycleEvent;
++
++public class AddUserWhenLockedPreferenceController
++        extends TogglePreferenceController
++        implements LifecycleObserver {
+ 
+     private final UserCapabilities mUserCaps;
++    private final ContentObserver mSettingsContentObserver;
++    private RestrictedSwitchPreference mPreference;
+ 
+-    public AddUserWhenLockedPreferenceController(Context context, String key) {
++    public AddUserWhenLockedPreferenceController(Context context, String key, Lifecycle lifecycle) {
+         super(context, key);
++        if (lifecycle != null) {
++            lifecycle.addObserver(this);
++        }
++
+         mUserCaps = UserCapabilities.create(context);
++        mSettingsContentObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
++            @Override
++            public void onChange(boolean selfChange, Uri uri) {
++                if (mPreference != null) {
++                    updateState(mPreference);
++                }
++            }
++        };
+     }
+ 
+     @Override
+@@ -39,6 +64,7 @@ public class AddUserWhenLockedPreferenceController extends TogglePreferenceContr
+         mUserCaps.updateAddUserCapabilities(mContext);
+         final RestrictedSwitchPreference restrictedSwitchPreference =
+                 (RestrictedSwitchPreference) preference;
++        updateStateViaSwitchUserSetting(restrictedSwitchPreference);
+         if (!isAvailable()) {
+             restrictedSwitchPreference.setVisible(false);
+         } else {
+@@ -55,6 +81,18 @@ public class AddUserWhenLockedPreferenceController extends TogglePreferenceContr
+         }
+     }
+ 
++    private void updateStateViaSwitchUserSetting(final RestrictedSwitchPreference preference) {
++        final boolean canSwitchUserWhenLocked =
++                SwitchUserWhenLockedPreferenceController.isChecked(mContext);
++        if (canSwitchUserWhenLocked) {
++            preference.setEnabled(true);
++            preference.setSummary(null);
++        } else {
++            preference.setEnabled(false);
++            preference.setSummary(R.string.user_add_on_lockscreen_menu_summary_no_switcher);
++        }
++    }
++
+     @Override
+     public int getAvailabilityStatus() {
+         if (!mUserCaps.isAdmin()) {
+@@ -88,4 +126,22 @@ public class AddUserWhenLockedPreferenceController extends TogglePreferenceContr
+     public int getSliceHighlightMenuRes() {
+         return R.string.menu_key_system;
+     }
++
++    @Override
++    public void displayPreference(PreferenceScreen screen) {
++        super.displayPreference(screen);
++        mPreference = (RestrictedSwitchPreference) screen.findPreference(getPreferenceKey());
++    }
++
++    @OnLifecycleEvent(Lifecycle.Event.ON_START)
++    public void onStart() {
++        mContext.getContentResolver().registerContentObserver(
++                SwitchUserWhenLockedPreferenceController.getSettingsUri(),
++                /* notifyForDescendants= */ false, mSettingsContentObserver);
++    }
++
++    @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
++    public void onStop() {
++        mContext.getContentResolver().unregisterContentObserver(mSettingsContentObserver);
++    }
+ }
+diff --git a/src/com/android/settings/users/SwitchUserWhenLockedPreferenceController.java b/src/com/android/settings/users/SwitchUserWhenLockedPreferenceController.java
+new file mode 100644
+index 00000000000..fed5e568b84
+--- /dev/null
++++ b/src/com/android/settings/users/SwitchUserWhenLockedPreferenceController.java
+@@ -0,0 +1,88 @@
++/*
++ * Copyright (C) 2016 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.android.settings.users;
++
++import android.content.Context;
++import android.net.Uri;
++
++import androidx.preference.Preference;
++
++import com.android.settings.R;
++import com.android.settings.core.TogglePreferenceController;
++import com.android.settingslib.RestrictedSwitchPreference;
++
++import lineageos.providers.LineageSettings;
++
++public class SwitchUserWhenLockedPreferenceController extends TogglePreferenceController {
++
++    public static Uri getSettingsUri() {
++        return LineageSettings.Secure.getUriFor(
++                LineageSettings.Secure.USER_SWITCHER_HIDDEN_WHEN_LOCKED);
++    }
++
++    public static boolean isChecked(final Context context) {
++        return LineageSettings.Secure.getInt(context.getContentResolver(),
++                LineageSettings.Secure.USER_SWITCHER_HIDDEN_WHEN_LOCKED, 0) == 0;
++    }
++
++    private final UserCapabilities mUserCaps;
++
++    public SwitchUserWhenLockedPreferenceController(Context context, String key) {
++        super(context, key);
++        mUserCaps = UserCapabilities.create(context);
++    }
++
++    @Override
++    public void updateState(Preference preference) {
++        super.updateState(preference);
++        final RestrictedSwitchPreference restrictedSwitchPreference =
++                (RestrictedSwitchPreference) preference;
++        if (!isAvailable()) {
++            restrictedSwitchPreference.setVisible(false);
++        } else {
++            if (android.multiuser.Flags.newMultiuserSettingsUx()) {
++                restrictedSwitchPreference.setVisible(true);
++            } else {
++                restrictedSwitchPreference.setVisible(mUserCaps.mUserSwitcherEnabled);
++            }
++        }
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        if (android.multiuser.Flags.newMultiuserSettingsUx()) {
++            return AVAILABLE;
++        } else {
++            return mUserCaps.mUserSwitcherEnabled ? AVAILABLE : CONDITIONALLY_UNAVAILABLE;
++        }
++    }
++
++    @Override
++    public boolean isChecked() {
++        return isChecked(mContext);
++    }
++
++    @Override
++    public boolean setChecked(boolean isChecked) {
++        return LineageSettings.Secure.putInt(mContext.getContentResolver(),
++                LineageSettings.Secure.USER_SWITCHER_HIDDEN_WHEN_LOCKED, isChecked ? 0 : 1);
++    }
++
++    @Override
++    public int getSliceHighlightMenuRes() {
++        return R.string.menu_key_system;
++    }
++}
+diff --git a/src/com/android/settings/users/UserSettings.java b/src/com/android/settings/users/UserSettings.java
+index 03e88655aa6..9350cf60eff 100644
+--- a/src/com/android/settings/users/UserSettings.java
++++ b/src/com/android/settings/users/UserSettings.java
+@@ -128,6 +128,8 @@ public class UserSettings extends SettingsPreferenceFragment
+     private static final String KEY_ADD_GUEST = "guest_add";
+     private static final String KEY_ADD_USER = "user_add";
+     private static final String KEY_ADD_SUPERVISED_USER = "supervised_user_add";
++    private static final String KEY_SWITCH_USER_WHEN_LOCKED =
++            "user_settings_switch_users_when_locked";
+     private static final String KEY_ADD_USER_WHEN_LOCKED = "user_settings_add_users_when_locked";
+     private static final String KEY_ENABLE_GUEST_TELEPHONY = "enable_guest_calling";
+     private static final String KEY_MULTIUSER_TOP_INTRO = "multiuser_top_intro";
+@@ -229,6 +231,7 @@ public class UserSettings extends SettingsPreferenceFragment
+     private RemoveGuestOnExitPreferenceController mRemoveGuestOnExitPreferenceController;
+     private MultiUserTopIntroPreferenceController mMultiUserTopIntroPreferenceController;
+     private TimeoutToDockUserPreferenceController mTimeoutToDockUserPreferenceController;
++    private SwitchUserWhenLockedPreferenceController mSwitchUserWhenLockedPreferenceController;
+     private UserCreatingDialog mUserCreatingDialog;
+     private final AtomicBoolean mGuestCreationScheduled = new AtomicBoolean();
+     private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
+@@ -316,7 +319,7 @@ public class UserSettings extends SettingsPreferenceFragment
+                 com.android.internal.R.bool.config_guestUserAutoCreated);
+ 
+         mAddUserWhenLockedPreferenceController = new AddUserWhenLockedPreferenceController(
+-                activity, KEY_ADD_USER_WHEN_LOCKED);
++                activity, KEY_ADD_USER_WHEN_LOCKED, getSettingsLifecycle());
+ 
+         mGuestTelephonyPreferenceController = new GuestTelephonyPreferenceController(
+                 activity, KEY_ENABLE_GUEST_TELEPHONY);
+@@ -330,12 +333,16 @@ public class UserSettings extends SettingsPreferenceFragment
+         mTimeoutToDockUserPreferenceController = new TimeoutToDockUserPreferenceController(
+                 activity, KEY_TIMEOUT_TO_DOCK_USER);
+ 
++        mSwitchUserWhenLockedPreferenceController = new SwitchUserWhenLockedPreferenceController(
++                activity, KEY_SWITCH_USER_WHEN_LOCKED);
++
+         final PreferenceScreen screen = getPreferenceScreen();
+         mAddUserWhenLockedPreferenceController.displayPreference(screen);
+         mGuestTelephonyPreferenceController.displayPreference(screen);
+         mRemoveGuestOnExitPreferenceController.displayPreference(screen);
+         mMultiUserTopIntroPreferenceController.displayPreference(screen);
+         mTimeoutToDockUserPreferenceController.displayPreference(screen);
++        mSwitchUserWhenLockedPreferenceController.displayPreference(screen);
+ 
+         screen.findPreference(mAddUserWhenLockedPreferenceController.getPreferenceKey())
+                 .setOnPreferenceChangeListener(mAddUserWhenLockedPreferenceController);
+@@ -428,6 +435,8 @@ public class UserSettings extends SettingsPreferenceFragment
+         mRemoveGuestOnExitPreferenceController.updateState(screen.findPreference(
+                 mRemoveGuestOnExitPreferenceController.getPreferenceKey()));
+         mSwitchBarController.updateState();
++        mSwitchUserWhenLockedPreferenceController.updateState(screen.findPreference(
++                mSwitchUserWhenLockedPreferenceController.getPreferenceKey()));
+         if (mShouldUpdateUserList) {
+             updateUI();
+         }
+@@ -1874,7 +1883,7 @@ public class UserSettings extends SettingsPreferenceFragment
+                     }
+                     AddUserWhenLockedPreferenceController controller =
+                             new AddUserWhenLockedPreferenceController(
+-                                    context, KEY_ADD_USER_WHEN_LOCKED);
++                                    context, KEY_ADD_USER_WHEN_LOCKED, null /* lifecycle */);
+                     controller.updateNonIndexableKeys(niks);
+                     new AutoSyncDataPreferenceController(context, null /* parent */)
+                             .updateNonIndexableKeys(niks);
+diff --git a/tests/robotests/src/com/android/settings/users/AddUserWhenLockedPreferenceControllerTest.java b/tests/robotests/src/com/android/settings/users/AddUserWhenLockedPreferenceControllerTest.java
+index b27b6367879..b174a819e2e 100644
+--- a/tests/robotests/src/com/android/settings/users/AddUserWhenLockedPreferenceControllerTest.java
++++ b/tests/robotests/src/com/android/settings/users/AddUserWhenLockedPreferenceControllerTest.java
+@@ -40,6 +40,8 @@ import org.robolectric.RobolectricTestRunner;
+ import org.robolectric.RuntimeEnvironment;
+ import org.robolectric.annotation.Config;
+ 
++import androidx.lifecycle.Lifecycle;
++
+ @RunWith(RobolectricTestRunner.class)
+ @Config(shadows = {ShadowUserManager.class})
+ public class AddUserWhenLockedPreferenceControllerTest {
+@@ -57,7 +59,8 @@ public class AddUserWhenLockedPreferenceControllerTest {
+         MockitoAnnotations.initMocks(this);
+         mContext = RuntimeEnvironment.application;
+         mUserManager = ShadowUserManager.getShadow();
+-        mController = new AddUserWhenLockedPreferenceController(mContext, "fake_key");
++        mController = new AddUserWhenLockedPreferenceController(mContext, "fake_key",
++                mock(Lifecycle.class));
+         mUserManager.setSupportsMultipleUsers(true);
+     }
+ 
+@@ -94,7 +97,8 @@ public class AddUserWhenLockedPreferenceControllerTest {
+         mUserManager.setUserSwitcherEnabled(true);
+         mUserManager.setSupportsMultipleUsers(true);
+         final AddUserWhenLockedPreferenceController controller =
+-                new AddUserWhenLockedPreferenceController(mContext, "fake_key");
++                new AddUserWhenLockedPreferenceController(mContext, "fake_key",
++                        mock(Lifecycle.class));
+         final RestrictedSwitchPreference preference = mock(RestrictedSwitchPreference.class);
+ 
+         controller.updateState(preference);
+-- 
+GitLab
+

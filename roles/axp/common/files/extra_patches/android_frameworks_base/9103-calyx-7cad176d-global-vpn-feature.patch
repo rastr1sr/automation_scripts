@@ -1,0 +1,222 @@
+From 7cad176d20d284b859d9324a130c30dfe9e6e80a Mon Sep 17 00:00:00 2001
+From: Oliver Scott <olivercscott@gmail.com>
+Date: Thu, 8 Jul 2021 10:41:43 -0400
+Subject: [PATCH] Global VPN feature
+
+* Modify existing VPN user range functions to conditionally have traffic
+  from all users pass through the global VPN.
+  These functions are called when:
+    1. Starting a VPN
+    2. Adding a user
+    3. Removing a user
+* Disallow starting VPNs in secondary users when a global VPN is set
+* Show Global VPN icon on all users
+* Only reset setting when the VPN package is removed on the main user
+
+https://review.calyxos.org/c/CalyxOS/platform_calyx-sdk/+/7540/2/packages/LineageSettingsProvider/res/values/defaults.xml#114
+sets the default value of global_vpn_app to an empty string.
+Handle it by checking TextUtils.isEmpty().
+
+Issue: calyxos#352
+Issue: calyxos#833
+Issue: calyxos#2761
+Change-Id2: I42616cc1f4e39e1dad739d81f6d5c55e218be995
+Change-Id3: Ic97d5eb1bea7f5420ef87933b1818d860d3ae429
+Change-Id: Id303036300c1d6b0efa131886d768367f22f4a29
+---
+ .../policy/SecurityControllerImpl.java        |  9 ++++-
+ .../com/android/server/VpnManagerService.java |  8 ++++
+ .../com/android/server/connectivity/Vpn.java  | 39 +++++++++++++++++--
+ 3 files changed, 51 insertions(+), 5 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/policy/SecurityControllerImpl.java b/packages/SystemUI/src/com/android/systemui/statusbar/policy/SecurityControllerImpl.java
+index f39762766633..e84d4d89e67c 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/policy/SecurityControllerImpl.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/policy/SecurityControllerImpl.java
+@@ -72,6 +72,8 @@ import java.util.concurrent.Executor;
+ 
+ import javax.inject.Inject;
+ 
++import lineageos.providers.LineageSettings;
++
+ /**
+  */
+ @SysUISingleton
+@@ -383,8 +385,13 @@ public class SecurityControllerImpl implements SecurityController {
+     @Override
+     public void onUserSwitched(int newUserId) {
+         mCurrentUserId = newUserId;
++        final String globalVpnApp = LineageSettings.Global.getString(mContext.getContentResolver(),
++                LineageSettings.Global.GLOBAL_VPN_APP);
+         final UserInfo newUserInfo = mUserManager.getUserInfo(newUserId);
+-        if (newUserInfo.isRestricted()) {
++        if (mCurrentVpns.get(UserHandle.USER_SYSTEM) != null &&
++                mCurrentVpns.get(UserHandle.USER_SYSTEM).user.equals(globalVpnApp)) {
++            mVpnUserId = UserHandle.USER_SYSTEM;
++        } else if (newUserInfo.isRestricted()) {
+             // VPN for a restricted profile is routed through its owner user
+             mVpnUserId = newUserInfo.restrictedProfileParentId;
+         } else {
+diff --git a/services/core/java/com/android/server/VpnManagerService.java b/services/core/java/com/android/server/VpnManagerService.java
+index 626fa708b4e7..080680d911a6 100644
+--- a/services/core/java/com/android/server/VpnManagerService.java
++++ b/services/core/java/com/android/server/VpnManagerService.java
+@@ -72,6 +72,8 @@ import java.io.FileDescriptor;
+ import java.io.PrintWriter;
+ import java.util.List;
+ 
++import lineageos.providers.LineageSettings;
++
+ /**
+  * Service that tracks and manages VPNs, and backs the VpnService and VpnManager APIs.
+  * @hide
+@@ -891,6 +893,12 @@ public class VpnManagerService extends IVpnManager.Stub {
+             }
+ 
+             vpn.refreshPlatformVpnAppExclusionList();
++
++            if (TextUtils.equals(vpn.getPackage(), packageName) && userId == UserHandle.USER_SYSTEM
++                    && vpn.isGlobalVpn()) {
++                LineageSettings.Global.putString(mContext.getContentResolver(),
++                        LineageSettings.Global.GLOBAL_VPN_APP, "");
++            }
+         }
+     }
+ 
+diff --git a/services/core/java/com/android/server/connectivity/Vpn.java b/services/core/java/com/android/server/connectivity/Vpn.java
+index 4c5f65285a9e..e1998c6e2f9f 100644
+--- a/services/core/java/com/android/server/connectivity/Vpn.java
++++ b/services/core/java/com/android/server/connectivity/Vpn.java
+@@ -188,6 +188,8 @@ import java.util.concurrent.ScheduledFuture;
+ import java.util.concurrent.ScheduledThreadPoolExecutor;
+ import java.util.concurrent.TimeUnit;
+ 
++import lineageos.providers.LineageSettings;
++
+ /**
+  * @hide
+  */
+@@ -778,6 +780,15 @@ public class Vpn {
+         return mAlwaysOn;
+     }
+ 
++    /**
++     * Returns whether currently prepared VPN package is set as the global VPN.
++     */
++    public synchronized boolean isGlobalVpn() {
++        final String globalVpnPkg = LineageSettings.Global.getString(mContext.getContentResolver(),
++                LineageSettings.Global.GLOBAL_VPN_APP);
++        return mUserId == UserHandle.USER_SYSTEM && mPackage.equals(globalVpnPkg);
++    }
++
+     /**
+      * Checks if a VPN app supports always-on mode.
+      *
+@@ -1720,6 +1731,7 @@ public class Vpn {
+         try {
+             // Restricted users are not allowed to create VPNs, they are tied to Owner
+             enforceNotRestrictedUser();
++            enforceNotGlobalVpn();
+ 
+             final PackageManager packageManager = mUserIdContext.getPackageManager();
+             if (packageManager == null) {
+@@ -1870,7 +1882,7 @@ public class Vpn {
+         addUserToRanges(ranges, userId, allowedApplications, disallowedApplications);
+ 
+         // If the user can have restricted profiles, assign all its restricted profiles too
+-        if (canHaveRestrictedProfile(userId)) {
++        if (canHaveRestrictedProfile(userId) || isGlobalVpn()) {
+             final long token = Binder.clearCallingIdentity();
+             List<UserInfo> users;
+             try {
+@@ -1879,7 +1891,8 @@ public class Vpn {
+                 Binder.restoreCallingIdentity(token);
+             }
+             for (UserInfo user : users) {
+-                if (user.isRestricted() && (user.restrictedProfileParentId == userId)) {
++                if ((user.isRestricted() && (user.restrictedProfileParentId == userId))
++                        || isGlobalVpn()) {
+                     addUserToRanges(ranges, user.id, allowedApplications, disallowedApplications);
+                 }
+             }
+@@ -1960,7 +1973,8 @@ public class Vpn {
+     public void onUserAdded(int userId) {
+         // If the user is restricted tie them to the parent user's VPN
+         UserInfo user = mUserManager.getUserInfo(userId);
+-        if (user.isRestricted() && user.restrictedProfileParentId == mUserId) {
++        if ((user.isRestricted() && user.restrictedProfileParentId == mUserId) ||
++                isGlobalVpn()) {
+             synchronized(Vpn.this) {
+                 final Set<Range<Integer>> existingRanges = mNetworkCapabilities.getUids();
+                 if (existingRanges != null) {
+@@ -1989,7 +2003,8 @@ public class Vpn {
+     public void onUserRemoved(int userId) {
+         // clean up if restricted
+         UserInfo user = mUserManager.getUserInfo(userId);
+-        if (user.isRestricted() && user.restrictedProfileParentId == mUserId) {
++        if ((user.isRestricted() && user.restrictedProfileParentId == mUserId) ||
++                isGlobalVpn()) {
+             synchronized(Vpn.this) {
+                 final Set<Range<Integer>> existingRanges = mNetworkCapabilities.getUids();
+                 if (existingRanges != null) {
+@@ -2414,6 +2429,17 @@ public class Vpn {
+         }
+     }
+ 
++    private void enforceNotGlobalVpn() {
++        Binder.withCleanCallingIdentity(() -> {
++            if (mUserId != UserHandle.USER_SYSTEM && !TextUtils.isEmpty(
++                    LineageSettings.Global.getString(mContext.getContentResolver(),
++                            LineageSettings.Global.GLOBAL_VPN_APP))) {
++                throw new SecurityException("Secondary users cannot configure VPNs when" +
++                        " global vpn is set");
++            }
++        });
++    }
++
+     /**
+      * Start legacy VPN, controlling native daemons as needed. Creates a
+      * secondary thread to perform connection work, returning quickly.
+@@ -2497,6 +2523,7 @@ public class Vpn {
+                     new UserHandle(mUserId))) {
+             throw new SecurityException("Restricted users cannot establish VPNs");
+         }
++        enforceNotGlobalVpn();
+ 
+         // Load certificates.
+         String privateKey = "";
+@@ -4039,6 +4066,7 @@ public class Vpn {
+ 
+         verifyCallingUidAndPackage(packageName);
+         enforceNotRestrictedUser();
++        enforceNotGlobalVpn();
+         validateRequiredFeatures(profile);
+ 
+         if (profile.isRestrictedToTestNetworks) {
+@@ -4081,6 +4109,7 @@ public class Vpn {
+ 
+         verifyCallingUidAndPackage(packageName);
+         enforceNotRestrictedUser();
++        enforceNotGlobalVpn();
+ 
+         final long token = Binder.clearCallingIdentity();
+         try {
+@@ -4150,6 +4179,7 @@ public class Vpn {
+         requireNonNull(packageName, "No package name provided");
+ 
+         enforceNotRestrictedUser();
++        enforceNotGlobalVpn();
+ 
+         // Prepare VPN for startup
+         if (!prepare(packageName, null /* newPackage */, VpnManager.TYPE_VPN_PLATFORM)) {
+@@ -4272,6 +4302,7 @@ public class Vpn {
+         requireNonNull(packageName, "No package name provided");
+ 
+         enforceNotRestrictedUser();
++        enforceNotGlobalVpn();
+ 
+         // To stop the VPN profile, the caller must be the current prepared package and must be
+         // running an Ikev2VpnProfile.
+-- 
+GitLab
+

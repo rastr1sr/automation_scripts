@@ -1,0 +1,155 @@
+From d9321cb2cfe4f3dee4460c5240e6e88bb4cc7e33 Mon Sep 17 00:00:00 2001
+From: Oliver Scott <olivercscott@gmail.com>
+Date: Mon, 19 Apr 2021 11:34:14 -0400
+Subject: [PATCH] Add setting to allow/disallow interacting with quick settings
+ on secure lockscreen (2/2)
+
+Add a Quick Settings toggle in secure screen lock settings
+
+Issue: calyxos#394
+Change-Id: I7dbb11173aa2010d8aa35761881d9bf6c8130967
+---
+ res/values/calyx_strings.xml                  |  4 +
+ res/xml/screen_lock_settings.xml              |  6 ++
+ .../screenlock/ScreenLockSettings.java        |  2 +
+ .../StatusBarPreferenceController.java        | 87 +++++++++++++++++++
+ 4 files changed, 99 insertions(+)
+ create mode 100644 src/com/android/settings/security/screenlock/StatusBarPreferenceController.java
+
+diff --git a/res/values/calyx_strings.xml b/res/values/calyx_strings.xml
+index 55c21772a01..1205f5d05db 100644
+--- a/res/values/calyx_strings.xml
++++ b/res/values/calyx_strings.xml
+@@ -31,4 +31,8 @@
+     <string name="panic_settings_title">Show Panic option</string>
+     <!-- Text shown for the description of the panic option -->
+     <string name="panic_settings_summary">Display power button option that activates an emergency panic trigger.</string>
++
++    <!-- Access QS on lockscreen -->
++    <string name="show_qs_on_secure_keyguard_title">Quick settings</string>
++    <string name="show_qs_on_secure_keyguard_summary">Allow toggling quick settings on secure lockscreen</string>
+ </resources>
+diff --git a/res/xml/screen_lock_settings.xml b/res/xml/screen_lock_settings.xml
+index 61f11b2ab00..b30fb4cc861 100644
+--- a/res/xml/screen_lock_settings.xml
++++ b/res/xml/screen_lock_settings.xml
+@@ -58,4 +58,10 @@
+         android:title="@string/unlock_scramble_pin_layout_title"
+         android:summary="@string/unlock_scramble_pin_layout_summary" />
+ 
++    <!-- available in pin/pattern/password/slide -->
++    <SwitchPreferenceCompat
++        android:key="status_bar_shown_on_secure_keyguard"
++        android:title="@string/show_qs_on_secure_keyguard_title"
++        android:summary="@string/show_qs_on_secure_keyguard_summary" />
++
+ </PreferenceScreen>
+diff --git a/src/com/android/settings/security/screenlock/ScreenLockSettings.java b/src/com/android/settings/security/screenlock/ScreenLockSettings.java
+index 0c0fd92d2c6..09094b174ea 100644
+--- a/src/com/android/settings/security/screenlock/ScreenLockSettings.java
++++ b/src/com/android/settings/security/screenlock/ScreenLockSettings.java
+@@ -90,6 +90,8 @@ public class ScreenLockSettings extends DashboardFragment
+                 context, MY_USER_ID, lockPatternUtils, parent));
+         controllers.add(new PinScramblePreferenceController(
+                 context, MY_USER_ID, lockPatternUtils));
++        controllers.add(new StatusBarPreferenceController(
++                context, MY_USER_ID, lockPatternUtils));
+         controllers.add(new OwnerInfoPreferenceController(context, parent));
+         return controllers;
+     }
+diff --git a/src/com/android/settings/security/screenlock/StatusBarPreferenceController.java b/src/com/android/settings/security/screenlock/StatusBarPreferenceController.java
+new file mode 100644
+index 00000000000..cf05beba594
+--- /dev/null
++++ b/src/com/android/settings/security/screenlock/StatusBarPreferenceController.java
+@@ -0,0 +1,87 @@
++/*
++ * Copyright (C) 2018 The LineageOS Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.settings.security.screenlock;
++
++import android.app.admin.DevicePolicyManager;
++import android.content.Context;
++
++import androidx.preference.Preference;
++import androidx.preference.TwoStatePreference;
++
++import com.android.internal.widget.LockPatternUtils;
++import com.android.settings.core.PreferenceControllerMixin;
++import com.android.settingslib.core.AbstractPreferenceController;
++
++import lineageos.providers.LineageSettings;
++
++public class StatusBarPreferenceController extends AbstractPreferenceController
++        implements PreferenceControllerMixin, Preference.OnPreferenceChangeListener {
++
++    static final String KEY_STATUS_BAR_SHOWN_ON_SECURE_KEYGUARD =
++            "status_bar_shown_on_secure_keyguard";
++
++    private final int mUserId;
++    private final LockPatternUtils mLockPatternUtils;
++
++    public StatusBarPreferenceController(Context context, int userId,
++            LockPatternUtils lockPatternUtils) {
++        super(context);
++        mUserId = userId;
++        mLockPatternUtils = lockPatternUtils;
++    }
++
++    @Override
++    public boolean isAvailable() {
++        if (!mLockPatternUtils.isSecure(mUserId)) {
++            return false;
++        }
++        switch (mLockPatternUtils.getKeyguardStoredPasswordQuality(mUserId)) {
++            case DevicePolicyManager.PASSWORD_QUALITY_SOMETHING:
++            case DevicePolicyManager.PASSWORD_QUALITY_NUMERIC:
++            case DevicePolicyManager.PASSWORD_QUALITY_NUMERIC_COMPLEX:
++            case DevicePolicyManager.PASSWORD_QUALITY_ALPHABETIC:
++            case DevicePolicyManager.PASSWORD_QUALITY_ALPHANUMERIC:
++            case DevicePolicyManager.PASSWORD_QUALITY_COMPLEX:
++            case DevicePolicyManager.PASSWORD_QUALITY_MANAGED:
++                return true;
++            default:
++                return false;
++        }
++    }
++
++    @Override
++    public String getPreferenceKey() {
++        return KEY_STATUS_BAR_SHOWN_ON_SECURE_KEYGUARD;
++    }
++
++    @Override
++    public void updateState(Preference preference) {
++        ((TwoStatePreference) preference).setChecked(LineageSettings.Secure.getInt(
++                mContext.getContentResolver(),
++                LineageSettings.Secure.QS_TILES_TOGGLEABLE_ON_LOCK_SCREEN,
++                1) == 1);
++    }
++
++    @Override
++    public boolean onPreferenceChange(Preference preference, Object newValue) {
++        LineageSettings.Secure.putInt(
++                mContext.getContentResolver(),
++                LineageSettings.Secure.QS_TILES_TOGGLEABLE_ON_LOCK_SCREEN,
++                (Boolean) newValue ? 1 : 0);
++        return true;
++    }
++}
+-- 
+GitLab
+

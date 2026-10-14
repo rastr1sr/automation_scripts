@@ -1,0 +1,61 @@
+From 283ae175c8d4c8f88a7d6bf04b7deaf6b33b05af Mon Sep 17 00:00:00 2001
+From: Tommy Webb <tommy@calyxinstitute.org>
+Date: Sun, 20 Apr 2025 12:13:48 -0400
+Subject: [PATCH] Let system enhance sensor privacy when locked
+
+Allow programmatic enabling of sensor privacy (turning off mic/camera
+access) when the device is locked.
+
+Issue: calyxos#3183
+Change-Id: Iabc139f59df5e63fa27f11beedef156a59b959d4
+---
+ .../server/sensorprivacy/SensorPrivacyService.java   | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/services/core/java/com/android/server/sensorprivacy/SensorPrivacyService.java b/services/core/java/com/android/server/sensorprivacy/SensorPrivacyService.java
+index 81217014bafe..716ae6bfa8df 100644
+--- a/services/core/java/com/android/server/sensorprivacy/SensorPrivacyService.java
++++ b/services/core/java/com/android/server/sensorprivacy/SensorPrivacyService.java
+@@ -820,7 +820,7 @@ public final class SensorPrivacyService extends SystemService {
+             // Enforce valid calling user on devices that enable visible background users.
+             enforceValidCallingUser(userId);
+ 
+-            if (!canChangeToggleSensorPrivacy(userId, sensor)) {
++            if (!canChangeToggleSensorPrivacy(userId, sensor, enable ? ENABLED : DISABLED)) {
+                 return;
+             }
+             if (enable && !supportsSensorToggle(TOGGLE_TYPE_SOFTWARE, sensor)) {
+@@ -854,7 +854,7 @@ public final class SensorPrivacyService extends SystemService {
+             // Enforce valid calling user on devices that enable visible background users.
+             enforceValidCallingUser(userId);
+ 
+-            if (!canChangeToggleSensorPrivacy(userId, sensor)) {
++            if (!canChangeToggleSensorPrivacy(userId, sensor, state)) {
+                 return;
+             }
+             if (!supportsSensorToggle(TOGGLE_TYPE_SOFTWARE, sensor)) {
+@@ -1076,7 +1076,8 @@ public final class SensorPrivacyService extends SystemService {
+             });
+         }
+ 
+-        private boolean canChangeToggleSensorPrivacy(@UserIdInt int userId, int sensor) {
++        private boolean canChangeToggleSensorPrivacy(@UserIdInt int userId, int sensor,
++                int newState) {
+             if (sensor == MICROPHONE && mCallStateHelper.isInEmergencyCall()) {
+                 // During emergency call the microphone toggle managed automatically
+                 Log.i(TAG, "Can't change mic toggle during an emergency call");
+@@ -1084,8 +1085,9 @@ public final class SensorPrivacyService extends SystemService {
+             }
+ 
+             if (requiresAuthentication() && mKeyguardManager != null
+-                    && mKeyguardManager.isDeviceLocked(userId)) {
+-                Log.i(TAG, "Can't change mic/cam toggle while device is locked");
++                    && mKeyguardManager.isDeviceLocked(userId)
++                    && newState != ENABLED) {
++                Log.i(TAG, "Can't change mic/cam toggle for less privacy while device is locked");
+                 return false;
+             }
+ 
+-- 
+GitLab
+

@@ -1,0 +1,255 @@
+From e156653d9e8c624934b32c44c646c8fae3325247 Mon Sep 17 00:00:00 2001
+From: Tommy Webb <tommy@calyxinstitute.org>
+Date: Tue, 25 Jun 2024 14:05:44 +0000
+Subject: [PATCH] Add Strict Location Redaction setting
+
+Issue: calyxos#2468
+Change-Id: Ic6bb59a32fe9441ecc8488c97c80e1ecbb51d5a1
+---
+ res/values/calyx_strings.xml                  |  4 ++
+ res/xml/more_security_privacy_settings.xml    |  8 +++
+ .../android/settings/SettingsApplication.java |  3 +
+ src/com/android/settings/Utils.java           | 24 +++++++
+ ...LocationRedactionPreferenceController.java | 63 ++++++++++++++++
+ .../StrictLocationRedactionReceiver.java      | 71 +++++++++++++++++++
+ 6 files changed, 173 insertions(+)
+ create mode 100644 src/com/android/settings/privacy/StrictLocationRedactionPreferenceController.java
+ create mode 100644 src/com/android/settings/privacy/StrictLocationRedactionReceiver.java
+
+diff --git a/res/values/calyx_strings.xml b/res/values/calyx_strings.xml
+index f276f1a5dff..b155e97dffe 100644
+--- a/res/values/calyx_strings.xml
++++ b/res/values/calyx_strings.xml
+@@ -155,4 +155,8 @@
+     <string name="work_hours_end_off_summary">Show a daily notification to turn off the work profile</string>
+     <string name="work_hours_end_notification_title">End of work day</string>
+     <string name="work_hours_end_notification_description">Tap to turn off work apps</string>
++
++    <!-- Strict location redaction setting -->
++    <string name="strict_location_redaction_title">Redact location data when sharing media</string>
++    <string name="strict_location_redaction_description">Only galleries and file managers may read location metadata from your photos and media. (Third-party apps must have All Files Access or Media Management permissions.)</string>
+ </resources>
+diff --git a/res/xml/more_security_privacy_settings.xml b/res/xml/more_security_privacy_settings.xml
+index c56e1d66a75..6338e39cdab 100644
+--- a/res/xml/more_security_privacy_settings.xml
++++ b/res/xml/more_security_privacy_settings.xml
+@@ -105,6 +105,14 @@
+             settings:controller=
+                 "com.android.settings.privacy.CameraExtensionsFallbackPreferenceController" />
+ 
++        <!-- Strict location redaction -->
++        <SwitchPreference
++            android:key="privacy_strict_location_redaction"
++            android:title="@string/strict_location_redaction_title"
++            android:summary="@string/strict_location_redaction_description"
++            settings:controller=
++                "com.android.settings.privacy.StrictLocationRedactionPreferenceController" />
++
+         <!-- Content Capture -->
+         <!-- NOTE: content capture has a different preference, depending whether or not the
+              ContentCaptureService implementations defines a custom settings activitiy on its manifest.
+diff --git a/src/com/android/settings/SettingsApplication.java b/src/com/android/settings/SettingsApplication.java
+index 99d3d922a0c..d136c551b26 100644
+--- a/src/com/android/settings/SettingsApplication.java
++++ b/src/com/android/settings/SettingsApplication.java
+@@ -40,6 +40,7 @@ import com.android.settings.homepage.SettingsHomepageActivity;
+ import com.android.settings.localepicker.LocaleNotificationDataManager;
+ import com.android.settings.overlay.FeatureFactory;
+ import com.android.settings.overlay.FeatureFactoryImpl;
++import com.android.settings.privacy.StrictLocationRedactionReceiver;
+ import com.android.settings.spa.SettingsSpaEnvironment;
+ import com.android.settingslib.applications.AppIconCacheManager;
+ import com.android.settingslib.datastore.BackupRestoreStorageManager;
+@@ -104,6 +105,8 @@ public class SettingsApplication extends Application {
+         }
+ 
+         registerActivityLifecycleCallbacks(new DeveloperOptionsActivityLifecycle());
++
++        new StrictLocationRedactionReceiver().register(this);
+     }
+ 
+     /** Returns the screens using metadata. */
+diff --git a/src/com/android/settings/Utils.java b/src/com/android/settings/Utils.java
+index 2a25458a272..6c5a42ba2db 100644
+--- a/src/com/android/settings/Utils.java
++++ b/src/com/android/settings/Utils.java
+@@ -1450,6 +1450,30 @@ public final class Utils extends com.android.settingslib.Utils {
+                 });
+     }
+ 
++    /**
++     * Sync a parent user's secure setting value to its child profiles.
++     *
++     * @param context application context.
++     * @param setting the secure setting whose parent value will be assigned to profiles.
++     * @param childProfile particular child profile to assign the value to, or {@code null} for all.
++     */
++    public static void syncSecureSettingWithProfiles(final Context context, final String setting,
++            final UserHandle childProfile) {
++        final UserManager userManager = context.getSystemService(UserManager.class);
++        final UserHandle parentUser = userManager.getProfileParent(context.getUser());
++        final int parentUserId = parentUser == null
++                ? context.getUserId() : parentUser.getIdentifier();
++        final ContentResolver cr = context.getContentResolver();
++        final String parentValue = android.provider.Settings.Secure.getStringForUser(cr, setting,
++                parentUserId);
++        final int childProfileId = childProfile == null ? -1 : childProfile.getIdentifier();
++        for (final int id : userManager.getProfileIdsWithDisabled(parentUserId)) {
++            if (id != parentUserId && (childProfile == null || childProfileId == id)) {
++                android.provider.Settings.Secure.putStringForUser(cr, setting, parentValue, id);
++            }
++        }
++    }
++
+     private static FaceManager.RemovalCallback faceManagerRemovalCallback(int userId) {
+         return new FaceManager.RemovalCallback() {
+             @Override
+diff --git a/src/com/android/settings/privacy/StrictLocationRedactionPreferenceController.java b/src/com/android/settings/privacy/StrictLocationRedactionPreferenceController.java
+new file mode 100644
+index 00000000000..e8522900b2c
+--- /dev/null
++++ b/src/com/android/settings/privacy/StrictLocationRedactionPreferenceController.java
+@@ -0,0 +1,63 @@
++/*
++ * Copyright (C) 2018 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.settings.privacy;
++
++import static android.provider.Settings.Secure.STRICT_LOCATION_REDACTION;
++
++import android.content.Context;
++import android.os.UserManager;
++import android.provider.Settings;
++
++import com.android.settings.core.TogglePreferenceController;
++
++public class StrictLocationRedactionPreferenceController extends TogglePreferenceController {
++    private final UserManager mUserManager;
++
++    public StrictLocationRedactionPreferenceController(Context context, String key) {
++        super(context, key);
++        mUserManager = context.getSystemService(UserManager.class);
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        return mUserManager.isProfile() ? DISABLED_FOR_USER : AVAILABLE;
++    }
++
++    @Override
++    public boolean isChecked() {
++        return Settings.Secure.getInt(mContext.getContentResolver(),
++                STRICT_LOCATION_REDACTION, /* def */ 1) != 0;
++    }
++
++    @Override
++    public boolean setChecked(boolean isChecked) {
++        Settings.Secure.putInt(mContext.getContentResolver(),
++                STRICT_LOCATION_REDACTION, isChecked ? 1 : 0);
++        return true;
++    }
++
++    @Override
++    public boolean isSliceable() {
++        return false;
++    }
++
++    @Override
++    public int getSliceHighlightMenuRes() {
++        // not needed since it's not sliceable
++        return NO_RES;
++    }
++}
+diff --git a/src/com/android/settings/privacy/StrictLocationRedactionReceiver.java b/src/com/android/settings/privacy/StrictLocationRedactionReceiver.java
+new file mode 100644
+index 00000000000..03a5ad657db
+--- /dev/null
++++ b/src/com/android/settings/privacy/StrictLocationRedactionReceiver.java
+@@ -0,0 +1,71 @@
++/*
++ * Copyright (C) 2024 The Calyx Institute
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.settings.privacy;
++
++import static android.provider.Settings.Secure.STRICT_LOCATION_REDACTION;
++
++import static com.android.settings.Utils.isProfileOf;
++import static com.android.settings.Utils.syncSecureSettingWithProfiles;
++
++import android.content.BroadcastReceiver;
++import android.content.Context;
++import android.content.Intent;
++import android.content.IntentFilter;
++import android.database.ContentObserver;
++import android.os.Handler;
++import android.os.Looper;
++import android.os.UserHandle;
++import android.os.UserManager;
++import android.provider.Settings;
++
++import java.util.List;
++
++public class StrictLocationRedactionReceiver extends BroadcastReceiver {
++
++    @Override
++    public void onReceive(final Context context, final Intent intent) {
++        final UserManager userManager = UserManager.get(context);
++        if (intent == null || userManager.isProfile()) {
++            return;
++        }
++        switch (intent.getAction()) {
++            case Intent.ACTION_PROFILE_ADDED:
++                final UserHandle addedUser = intent.getParcelableExtra(Intent.EXTRA_USER);
++                syncSecureSettingWithProfiles(context, STRICT_LOCATION_REDACTION, addedUser);
++                break;
++        }
++    }
++
++    public void register(final Context context) {
++        final UserManager userManager = UserManager.get(context);
++        if (userManager.isProfile()) {
++            return;
++        }
++        context.getContentResolver().registerContentObserver(
++                Settings.Secure.getUriFor(STRICT_LOCATION_REDACTION),
++                /* notifyForDescendants */ false,
++                new ContentObserver(new Handler(Looper.getMainLooper())) {
++                    @Override
++                    public void onChange(boolean selfChange) {
++                        super.onChange(selfChange);
++                        syncSecureSettingWithProfiles(context, STRICT_LOCATION_REDACTION,
++                                /* profileId */ null);
++                    }
++                });
++        context.registerReceiver(this, new IntentFilter(Intent.ACTION_PROFILE_ADDED));
++    }
++}
+-- 
+GitLab
+

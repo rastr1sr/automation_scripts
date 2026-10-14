@@ -1,0 +1,209 @@
+From 751d7f4979ab40c344f28f51b4bb5c64bcca01ae Mon Sep 17 00:00:00 2001
+From: Oliver Scott <olivercscott@gmail.com>
+Date: Tue, 12 Nov 2024 15:17:42 -0500
+Subject: [PATCH] Add setting to disable user switcher on secure lockscreen
+ (1/2)
+
+Also controls whether the power menu End Session button is available;
+if user switcher is hidden on lock screen, End Session will be, too.
+
+Issue: calyxos#1373
+Change-Id: I9e8f960b7f67338d202408d8668f988abdc437d5
+---
+ .../GlobalActionsDialogLite.java              |  4 +-
+ .../phone/KeyguardStatusBarView.java          |  7 ++-
+ .../KeyguardStatusBarViewController.java      | 17 ++++++++
+ .../data/repository/UserSwitcherRepository.kt | 43 ++++++++++++++++++-
+ 4 files changed, 68 insertions(+), 3 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
+index d10d887e2e7b..23980a3fc6c3 100644
+--- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
++++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
+@@ -1146,7 +1146,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+ 
+         @Override
+         public boolean showDuringKeyguard() {
+-            return true;
++            return LineageSettings.Secure.getIntForUser(mContext.getContentResolver(),
++                    LineageSettings.Secure.USER_SWITCHER_HIDDEN_WHEN_LOCKED,
++                    /* defaultValue */ 0, getCurrentUser().id) == 0;
+         }
+ 
+         @Override
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarView.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarView.java
+index 6a77988e5feb..d933fabc7a7d 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarView.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarView.java
+@@ -20,6 +20,7 @@ import static com.android.systemui.ScreenDecorations.DisplayCutoutView.boundsFro
+ import static com.android.systemui.util.Utils.getStatusBarHeaderHeightKeyguard;
+ 
+ import android.annotation.ColorInt;
++import android.app.ActivityManager;
+ import android.content.Context;
+ import android.content.res.Configuration;
+ import android.content.res.Resources;
+@@ -57,6 +58,7 @@ import kotlinx.coroutines.flow.FlowKt;
+ import kotlinx.coroutines.flow.MutableStateFlow;
+ import kotlinx.coroutines.flow.StateFlow;
+ import kotlinx.coroutines.flow.StateFlowKt;
++import lineageos.providers.LineageSettings;
+ 
+ import java.io.PrintWriter;
+ import java.util.ArrayList;
+@@ -248,7 +250,10 @@ public class KeyguardStatusBarView extends RelativeLayout {
+             // If we have no keyguard switcher, the screen width is under 600dp. In this case,
+             // we only show the multi-user switch if it's enabled through UserManager as well as
+             // by the user.
+-            if (mIsUserSwitcherEnabled) {
++            if (mIsUserSwitcherEnabled && LineageSettings.Secure.getIntForUser(
++                    mContext.getContentResolver(),
++                    LineageSettings.Secure.USER_SWITCHER_HIDDEN_WHEN_LOCKED, 0,
++                    ActivityManager.getCurrentUser()) == 0) {
+                 mMultiUserAvatar.setVisibility(View.VISIBLE);
+             } else {
+                 mMultiUserAvatar.setVisibility(View.GONE);
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarViewController.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarViewController.java
+index 2433b78fc183..52db1e0ff162 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarViewController.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardStatusBarViewController.java
+@@ -27,6 +27,8 @@ import android.content.res.Configuration;
+ import android.content.res.Resources;
+ import android.database.ContentObserver;
+ import android.hardware.biometrics.BiometricSourceType;
++import android.os.Handler;
++import android.os.Looper;
+ import android.os.UserHandle;
+ import android.os.UserManager;
+ import android.provider.Settings;
+@@ -83,6 +85,7 @@ import com.android.systemui.util.ViewController;
+ import com.android.systemui.util.settings.SecureSettings;
+ 
+ import kotlin.Unit;
++import lineageos.providers.LineageSettings;
+ 
+ import kotlinx.coroutines.CoroutineDispatcher;
+ 
+@@ -253,6 +256,14 @@ public class KeyguardStatusBarViewController extends ViewController<KeyguardStat
+                 }
+             };
+ 
++    private final ContentObserver mUserSwitcherHiddenWhenLockedObserver = new ContentObserver(
++            new Handler(Looper.getMainLooper())) {
++        @Override
++        public void onChange(boolean selfChange) {
++            updateViewState();
++        }
++    };
++
+     private boolean mCommunalShowing;
+ 
+     private final Consumer<Boolean> mCommunalConsumer = (communalShowing) -> {
+@@ -459,6 +470,10 @@ public class KeyguardStatusBarViewController extends ViewController<KeyguardStat
+                 mToGlanceableHubStatusBarAlphaConsumer, mCoroutineDispatcher);
+         collectFlow(mView, mHubToLockscreenTransitionViewModel.getStatusBarAlpha(),
+                 mFromGlanceableHubStatusBarAlphaConsumer, mCoroutineDispatcher);
++        mView.getContext().getContentResolver().registerContentObserver(
++                LineageSettings.Secure.getUriFor(
++                        LineageSettings.Secure.USER_SWITCHER_HIDDEN_WHEN_LOCKED), false,
++                mUserSwitcherHiddenWhenLockedObserver, UserHandle.USER_ALL);
+     }
+ 
+     @Override
+@@ -474,6 +489,8 @@ public class KeyguardStatusBarViewController extends ViewController<KeyguardStat
+         if (mTintedIconManager != null) {
+             mStatusBarIconController.removeIconGroup(mTintedIconManager);
+         }
++        mView.getContext().getContentResolver().unregisterContentObserver(
++                mUserSwitcherHiddenWhenLockedObserver);
+     }
+ 
+     /** Should be called when the theme changes. */
+diff --git a/packages/SystemUI/src/com/android/systemui/user/data/repository/UserSwitcherRepository.kt b/packages/SystemUI/src/com/android/systemui/user/data/repository/UserSwitcherRepository.kt
+index bcbd679b35eb..d96b2c522f63 100644
+--- a/packages/SystemUI/src/com/android/systemui/user/data/repository/UserSwitcherRepository.kt
++++ b/packages/SystemUI/src/com/android/systemui/user/data/repository/UserSwitcherRepository.kt
+@@ -17,8 +17,10 @@
+ package com.android.systemui.user.data.repository
+ 
+ import android.content.Context
++import android.database.ContentObserver
+ import android.graphics.drawable.Drawable
+ import android.os.Handler
++import android.os.UserHandle
+ import android.os.UserManager
+ import android.provider.Settings.Global.USER_SWITCHER_ENABLED
+ import com.android.app.tracing.coroutines.launchTraced as launch
+@@ -27,6 +29,7 @@ import com.android.systemui.common.coroutine.ConflatedCallbackFlow.conflatedCall
+ import com.android.systemui.dagger.SysUISingleton
+ import com.android.systemui.dagger.qualifiers.Application
+ import com.android.systemui.dagger.qualifiers.Background
++import com.android.systemui.keyguard.data.repository.KeyguardRepository
+ import com.android.systemui.qs.SettingObserver
+ import com.android.systemui.qs.footer.data.model.UserSwitcherStatusModel
+ import com.android.systemui.res.R
+@@ -42,6 +45,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
+ import kotlinx.coroutines.flow.flatMapLatest
+ import kotlinx.coroutines.flow.flowOf
+ import kotlinx.coroutines.withContext
++import lineageos.providers.LineageSettings
+ 
+ interface UserSwitcherRepository {
+     /** The current [UserSwitcherStatusModel]. */
+@@ -63,6 +67,7 @@ constructor(
+     private val userInfoController: UserInfoController,
+     private val globalSetting: GlobalSettings,
+     private val userRepository: UserRepository,
++    private val keyguardRepository: KeyguardRepository,
+ ) : UserSwitcherRepository {
+     private val showUserSwitcherForSingleUser =
+         context.resources.getBoolean(R.bool.qs_show_user_switcher_for_single_user)
+@@ -123,8 +128,44 @@ constructor(
+         awaitClose { userInfoController.removeCallback(listener) }
+     }
+ 
++    private val userSwitcherHiddenWhenLocked: Flow<Boolean> = conflatedCallbackFlow {
++        val observer =
++            object : ContentObserver(null) {
++                override fun onChange(selfChange: Boolean) {
++                    trySend(
++                        LineageSettings.Secure.getIntForUser(
++                            context.contentResolver,
++                            LineageSettings.Secure.USER_SWITCHER_HIDDEN_WHEN_LOCKED,
++                            0,
++                            userRepository.getSelectedUserInfo().id
++                        ) == 1
++                    )
++                }
++            }
++        context.contentResolver.registerContentObserver(
++            LineageSettings.Secure.getUriFor(
++                LineageSettings.Secure.USER_SWITCHER_HIDDEN_WHEN_LOCKED
++            ), false, observer, UserHandle.USER_ALL
++        )
++        trySend(
++            LineageSettings.Secure.getIntForUser(
++                context.contentResolver,
++                LineageSettings.Secure.USER_SWITCHER_HIDDEN_WHEN_LOCKED,
++                0,
++                userRepository.getSelectedUserInfo().id
++            ) == 1
++        )
++        awaitClose { context.contentResolver.unregisterContentObserver(observer) }
++    }
++
+     override val userSwitcherStatus: Flow<UserSwitcherStatusModel> =
+-        isEnabled
++        combine(
++            isEnabled,
++            keyguardRepository.isKeyguardDismissible,
++            userSwitcherHiddenWhenLocked
++        ) { isEnabled, isKeyguardDismissible, userSwitcherHiddenWhenLocked ->
++            isEnabled && (isKeyguardDismissible || !userSwitcherHiddenWhenLocked)
++        }
+             .flatMapLatest { enabled ->
+                 if (enabled) {
+                     combine(currentUserName, currentUserInfo) { name, (icon, isGuest) ->
+-- 
+GitLab
+

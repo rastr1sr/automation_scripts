@@ -12,3 +12,7 @@
 - name: "A15: compensate lineage-22.2 drift (AXP fork)"
   ansible.builtin.include_tasks: a15_lineage_drift.yml
   when: android_shortversion == "a15"
+
+- name: "A15: extra privacy patches (AXP fork)"
+  ansible.builtin.include_tasks: extra_patches.yml
+  when: android_shortversion == "a15"

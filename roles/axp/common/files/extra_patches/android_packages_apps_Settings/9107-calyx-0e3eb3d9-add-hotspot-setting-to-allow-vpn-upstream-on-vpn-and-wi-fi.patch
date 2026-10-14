@@ -1,0 +1,161 @@
+From 0e3eb3d925574cdc7d1f5f6230274c815b266ee1 Mon Sep 17 00:00:00 2001
+From: Oliver Scott <olivercscott@gmail.com>
+Date: Fri, 25 Apr 2025 12:58:00 -0400
+Subject: [PATCH] Add hotspot setting to allow VPN upstream on VPN and Wi-Fi
+ hotspot settings
+
+Issue: calyxos#2645
+Change-Id: Icb76547ca92a569844f5211e3d853b3f6bb4fc38
+---
+ res/xml/vpn_settings2.xml                     | 14 ++++++
+ res/xml/wifi_tether_settings.xml              |  6 +++
+ .../android/settings/vpn2/VpnSettings.java    | 47 +++++++++++++++++--
+ 3 files changed, 64 insertions(+), 3 deletions(-)
+
+diff --git a/res/xml/vpn_settings2.xml b/res/xml/vpn_settings2.xml
+index 0d374c75518..8ac8c0aac88 100644
+--- a/res/xml/vpn_settings2.xml
++++ b/res/xml/vpn_settings2.xml
+@@ -15,10 +15,24 @@
+ -->
+ 
+ <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
++        xmlns:settings="http://schemas.android.com/apk/res-auto"
+         android:title="@string/vpn_title">
+     <PreferenceCategory
+         android:key="advanced_vpn_group"/>
+ 
+     <PreferenceCategory
+         android:key="vpn_group"/>
++
++    <PreferenceCategory
++        android:key="vpn_tether_settings_group"
++        android:title="@string/tether_settings_title_all"
++        settings:isPreferenceVisible="false">
++
++        <lineageos.preference.SecureSettingSwitchPreference
++            android:key="tethering_allow_vpn_upstreams"
++            android:title="@string/tethering_allow_vpn_upstreams_title"
++            android:summary="@string/tethering_allow_vpn_upstreams_summary"
++            android:defaultValue="true" />
++
++    </PreferenceCategory>
+ </PreferenceScreen>
+diff --git a/res/xml/wifi_tether_settings.xml b/res/xml/wifi_tether_settings.xml
+index 4924bf90820..cd386e187b4 100644
+--- a/res/xml/wifi_tether_settings.xml
++++ b/res/xml/wifi_tether_settings.xml
+@@ -65,4 +65,10 @@
+         android:title="@string/wifi_hotspot_instant_title"
+         android:summary="@string/summary_placeholder"
+         settings:isPreferenceVisible="false"/>
++
++    <lineageos.preference.SecureSettingSwitchPreference
++        android:key="tethering_allow_vpn_upstreams"
++        android:title="@string/tethering_allow_vpn_upstreams_title"
++        android:summary="@string/tethering_allow_vpn_upstreams_summary"
++        android:defaultValue="true" />
+ </PreferenceScreen>
+diff --git a/src/com/android/settings/vpn2/VpnSettings.java b/src/com/android/settings/vpn2/VpnSettings.java
+index 093d2bec6c8..2025855cecf 100644
+--- a/src/com/android/settings/vpn2/VpnSettings.java
++++ b/src/com/android/settings/vpn2/VpnSettings.java
+@@ -90,6 +90,7 @@ public class VpnSettings extends RestrictedDashboardFragment implements
+     private static final int RESCAN_INTERVAL_MS = 1000;
+     private static final String ADVANCED_VPN_GROUP_KEY = "advanced_vpn_group";
+     private static final String VPN_GROUP_KEY = "vpn_group";
++    private static final String VPN_TETHER_SETTINGS_GROUP_KEY = "vpn_tether_settings_group";
+ 
+     private static final NetworkRequest VPN_REQUEST = new NetworkRequest.Builder()
+             .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+@@ -112,6 +113,9 @@ public class VpnSettings extends RestrictedDashboardFragment implements
+     private boolean mUnavailable;
+     private AdvancedVpnFeatureProvider mFeatureProvider;
+     private PreferenceScreen mPreferenceScreen;
++    private PreferenceGroup mAdvancedVpnGroup;
++    private PreferenceGroup mVpnGroup;
++    private PreferenceGroup mVpnTetherSettingsGroup;
+     private boolean mIsAdvancedVpnSupported;
+ 
+     public VpnSettings() {
+@@ -137,6 +141,13 @@ public class VpnSettings extends RestrictedDashboardFragment implements
+         setHasOptionsMenu(!mUnavailable);
+ 
+         mPreferenceScreen = getPreferenceScreen();
++        mAdvancedVpnGroup = mPreferenceScreen.findPreference(ADVANCED_VPN_GROUP_KEY);
++        mVpnGroup = mPreferenceScreen.findPreference(VPN_GROUP_KEY);
++        mVpnTetherSettingsGroup = mPreferenceScreen.findPreference(VPN_TETHER_SETTINGS_GROUP_KEY);
++        if (!mIsAdvancedVpnSupported && mAdvancedVpnGroup != null) {
++            mPreferenceScreen.removePreference(mAdvancedVpnGroup);
++        }
++        maybeAdaptForEmpty();
+     }
+ 
+     @Override
+@@ -217,6 +228,34 @@ public class VpnSettings extends RestrictedDashboardFragment implements
+         mUpdater.sendEmptyMessage(RESCAN_MESSAGE);
+     }
+ 
++    private void maybeAdaptForEmpty() {
++        if (mVpnTetherSettingsGroup == null || mAdvancedVpnGroup == null || mVpnGroup == null) {
++            Log.e(LOG_TAG, "Inexplicably cannot find one or more preference categories");
++            return;
++        }
++        final boolean shouldShowPreferences =
++                !mLegacyVpnPreferences.isEmpty() || !mAppPreferences.isEmpty();
++        final boolean showingTetherPreferences = mPreferenceScreen.findPreference(
++                VPN_TETHER_SETTINGS_GROUP_KEY
++        ) != null;
++        if (showingTetherPreferences != shouldShowPreferences) {
++            mVpnTetherSettingsGroup.setVisible(shouldShowPreferences);
++            if (shouldShowPreferences) {
++                mPreferenceScreen.addPreference(mVpnTetherSettingsGroup);
++                if (mIsAdvancedVpnSupported) {
++                    mPreferenceScreen.addPreference(mAdvancedVpnGroup);
++                }
++                mPreferenceScreen.addPreference(mVpnGroup);
++            } else {
++                mPreferenceScreen.removePreference(mVpnTetherSettingsGroup);
++                if (mIsAdvancedVpnSupported) {
++                    mPreferenceScreen.removePreference(mAdvancedVpnGroup);
++                }
++                mPreferenceScreen.removePreference(mVpnGroup);
++            }
++        }
++    }
++
+     @Override
+     protected int getPreferenceScreenResId() {
+         return R.xml.vpn_settings2;
+@@ -370,6 +409,8 @@ public class VpnSettings extends RestrictedDashboardFragment implements
+             } else {
+                 mSettings.setShownPreferences(updates);
+             }
++
++            mSettings.maybeAdaptForEmpty();
+         }
+     }
+ 
+@@ -382,7 +423,7 @@ public class VpnSettings extends RestrictedDashboardFragment implements
+     public void setShownPreferences(final Collection<Preference> updates) {
+         retainAllPreference(updates);
+ 
+-        final PreferenceGroup vpnGroup = mPreferenceScreen;
++        final PreferenceGroup vpnGroup = mVpnGroup;
+         updatePreferenceGroup(vpnGroup, updates);
+ 
+         // Show all new preferences on the screen
+@@ -395,8 +436,8 @@ public class VpnSettings extends RestrictedDashboardFragment implements
+     void setShownAdvancedPreferences(final Collection<Preference> updates) {
+         retainAllPreference(updates);
+ 
+-        PreferenceGroup advancedVpnGroup = mPreferenceScreen.findPreference(ADVANCED_VPN_GROUP_KEY);
+-        PreferenceGroup vpnGroup = mPreferenceScreen.findPreference(VPN_GROUP_KEY);
++        final PreferenceGroup advancedVpnGroup = mAdvancedVpnGroup;
++        final PreferenceGroup vpnGroup = mVpnGroup;
+         advancedVpnGroup.setTitle(
+                 mFeatureProvider.getAdvancedVpnPreferenceGroupTitle(getContext()));
+         vpnGroup.setTitle(mFeatureProvider.getVpnPreferenceGroupTitle(getContext()));
+-- 
+GitLab
+

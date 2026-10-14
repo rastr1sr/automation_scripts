@@ -1,0 +1,9 @@
+---
+# AXP fork: extra patches (mostly CalyxOS android15-qpr2) dropped into AXP's per-repo patch dirs.
+# findApplyPatches() in Patch.sh applies every *.patch there in version order, so 91xx runs after AXP's own.
+
+- name: "Extra patches: copy into AXP patch tree"
+  ansible.builtin.copy:
+    src: "extra_patches/"
+    dest: "{{ DOSPATH }}/Patches/LineageOS-{{ los_version }}/"
+    mode: "0644"

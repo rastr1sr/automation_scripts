@@ -1,32 +1,40 @@
 ---
-# Keep AXP.OS A15 Patch.sh working against the current lineage-22.2 tip.
-# 1. shallow syncs (--depth=1) lack the commits Patch.sh reverts: fetch them by hash and pin them
-# 2. LineageOS e006566 (2026-07-10) made WebView use ComputerEngine.isDebuggable(), which the
+# Keep AXP.OS A15 scripts working against the current lineage-22.2 tip.
+# 1. LineageOS e006566 (2026-07-10) made WebView use ComputerEngine.isDebuggable(), which the
 #    microG signature spoofing revert removes -> revert e006566 first
-
-- name: "A15 drift: fetch + pin commits reverted by Patch.sh"
-  ansible.builtin.shell: |
-      set -e
-      while read d h; do
-        r=$(git -C "$d" remote | head -1)
-        git -C "$d" cat-file -e "$h^{commit}" 2>/dev/null || git -C "$d" fetch -q --depth=2 "$r" "$h"
-        git -C "$d" update-ref "refs/axp-keep/$h" "$h"
-      done <<EOF
-      build/make 9f6fa1b5448ec1a295c13664aa64c0a45575f3f9
-      frameworks/base c174e1c42975c140c63ecac9c022665ab5e0b1b2
-      frameworks/base c60ecdffedf5ec9e05bd92dc022cbb763f49a104
-      frameworks/base e41076c6ef0b00e5dcfc4aaff3df53f9841098a8
-      frameworks/base e006566046a0a9d96bb23777f75756db9ff01410
-      system/core 1ffcee96d7d7c20561161a6bda34c914f41a6c49
-      system/core b3b9c454374816c86181744ad7a17d1b86607af2
-      system/update_engine 2b50813dfda68325d8aec33c00346de9195bff0e
-      EOF
-  args:
-    executable: /bin/bash
-    chdir: "{{ SRCPATH }}"
+# 2. shallow syncs (--depth=1) lack the commits the AXP scripts revert/cherry-pick by hash:
+#    discover every "git ... <sha>" inside an enter/enterAndClear "<dir>" block, fetch + pin them
 
 - name: "A15 drift: revert LineageOS e006566 before the microG reverts"
   ansible.builtin.lineinfile:
     path: "{{ DOSPATH }}/Scripts/LineageOS-22.2/Patch.sh"
     insertbefore: 'git revert --no-edit c60ecdffedf5ec9e05bd92dc022cbb763f49a104'
     line: 'git revert --no-edit e006566046a0a9d96bb23777f75756db9ff01410; #AXP fork: webview isDebuggable() depends on the microG spoofing code reverted below'
+
+- name: "A15 drift: fetch + pin commits referenced by hash in AXP scripts"
+  ansible.builtin.shell: |
+      set -e
+      python3 - "{{ DOSPATH }}" > /tmp/axp_hashes.txt <<'PY'
+      import re, glob, sys
+      root = sys.argv[1]
+      out = set()
+      for f in glob.glob(root + '/Scripts/LineageOS-22.2/*.sh') + glob.glob(root + '/Scripts/Common/*.sh'):
+          d = None
+          for line in open(f, errors='ignore'):
+              m = re.search(r'\benter(?:AndClear)? "([^"]+)"', line)
+              if m: d = m.group(1)
+              code = line.split('#', 1)[0]
+              if d and re.search(r'\bgit\b', code):
+                  for h in re.findall(r'\b[0-9a-f]{40}\b', code): out.add((d, h))
+      for d, h in sorted(out): print(d, h)
+      PY
+      while read d h; do
+        [ -d "$d" ] || continue
+        r=$(git -C "$d" remote | head -1)
+        git -C "$d" cat-file -e "$h^{commit}" 2>/dev/null || git -C "$d" fetch -q --depth=2 "$r" "$h"
+        git -C "$d" update-ref "refs/axp-keep/$h" "$h"
+        echo "pinned $d $h"
+      done < /tmp/axp_hashes.txt
+  args:
+    executable: /bin/bash
+    chdir: "{{ SRCPATH }}"

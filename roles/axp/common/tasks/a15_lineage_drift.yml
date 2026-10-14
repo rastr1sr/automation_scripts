@@ -6,6 +6,7 @@
 
 - name: "A15 drift: fetch + pin commits reverted by Patch.sh"
   ansible.builtin.shell: |
+      set -e
       while read d h; do
         r=$(git -C "$d" remote | head -1)
         git -C "$d" cat-file -e "$h^{commit}" 2>/dev/null || git -C "$d" fetch -q --depth=2 "$r" "$h"
@@ -15,7 +16,7 @@
       frameworks/base c174e1c42975c140c63ecac9c022665ab5e0b1b2
       frameworks/base c60ecdffedf5ec9e05bd92dc022cbb763f49a104
       frameworks/base e41076c6ef0b00e5dcfc4aaff3df53f9841098a8
-      frameworks/base e006566046a0bfd8b0f41e7d7930e4b3ab6c69da
+      frameworks/base e006566046a0a9d96bb23777f75756db9ff01410
       system/core 1ffcee96d7d7c20561161a6bda34c914f41a6c49
       system/core b3b9c454374816c86181744ad7a17d1b86607af2
       system/update_engine 2b50813dfda68325d8aec33c00346de9195bff0e
@@ -28,4 +29,4 @@
   ansible.builtin.lineinfile:
     path: "{{ DOSPATH }}/Scripts/LineageOS-22.2/Patch.sh"
     insertbefore: 'git revert --no-edit c60ecdffedf5ec9e05bd92dc022cbb763f49a104'
-    line: 'git revert --no-edit e006566046a0bfd8b0f41e7d7930e4b3ab6c69da; #AXP fork: webview isDebuggable() depends on the microG spoofing code reverted below'
+    line: 'git revert --no-edit e006566046a0a9d96bb23777f75756db9ff01410; #AXP fork: webview isDebuggable() depends on the microG spoofing code reverted below'

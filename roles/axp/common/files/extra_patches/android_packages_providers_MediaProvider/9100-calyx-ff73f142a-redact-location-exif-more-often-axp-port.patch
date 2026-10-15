@@ -1,0 +1,377 @@
+From a68fe39eabe6a621ca58565e63da7cd69086fcfd Mon Sep 17 00:00:00 2001
+From: Tommy Webb <tommy@calyxinstitute.org>
+Date: Tue, 18 Jun 2024 18:15:20 +0000
+Subject: [PATCH] Redact location exif more often
+
+Ported to AXP.OS lineage-22.2 (rhodep fork) from GrapheneOS ff73f142a6a6.
+
+Change-Id: I912e3843974c904542a1a4c0d6ac375b2974003e
+---
+ .../providers/media/LocalCallingIdentity.java |  6 ++
+ .../providers/media/MediaProvider.java        | 94 +++++++++++++++++--
+ .../providers/media/util/PermissionUtils.java | 15 ++-
+ .../util/StrictLocationRedactionHelper.java   | 84 +++++++++++++++++
+ 4 files changed, 189 insertions(+), 10 deletions(-)
+ create mode 100644 src/com/android/providers/media/util/StrictLocationRedactionHelper.java
+
+diff --git a/src/com/android/providers/media/LocalCallingIdentity.java b/src/com/android/providers/media/LocalCallingIdentity.java
+index e30a68c..0570f0e 100644
+--- a/src/com/android/providers/media/LocalCallingIdentity.java
++++ b/src/com/android/providers/media/LocalCallingIdentity.java
+@@ -26,6 +26,7 @@ import static com.android.providers.media.util.PermissionUtils.checkPermissionAc
+ import static com.android.providers.media.util.PermissionUtils.checkPermissionAccessOemMetadata;
+ import static com.android.providers.media.util.PermissionUtils.checkPermissionDelegator;
+ import static com.android.providers.media.util.PermissionUtils.checkPermissionInstallPackages;
++import static com.android.providers.media.util.PermissionUtils.checkPermissionManageMedia;
+ import static com.android.providers.media.util.PermissionUtils.checkPermissionManager;
+ import static com.android.providers.media.util.PermissionUtils.checkPermissionQueryAllPackages;
+ import static com.android.providers.media.util.PermissionUtils.checkPermissionReadAudio;
+@@ -354,6 +355,8 @@ public class LocalCallingIdentity {
+     public static final int PERMISSION_ACCESS_MEDIA_OWNER_PACKAGE_NAME = 1 << 29;
+     public static final int PERMISSION_ACCESS_OEM_METADATA = 1 << 30;
+ 
++    public static final int PERMISSION_MANAGE_MEDIA = 1 << 31; // AXP fork: 1 << 30 is PERMISSION_ACCESS_OEM_METADATA in this tree
++
+     private volatile int hasPermission;
+     private volatile int hasPermissionResolved;
+ 
+@@ -438,6 +441,9 @@ public class LocalCallingIdentity {
+             case PERMISSION_ACCESS_MEDIA_OWNER_PACKAGE_NAME:
+                 return checkPermissionAccessMediaOwnerPackageName(
+                         context, pid, uid, getPackageName(), attributionTag);
++            case PERMISSION_MANAGE_MEDIA:
++                return checkPermissionManageMedia(context, pid, uid, getPackageName(),
++                        attributionTag);
+             case PERMISSION_ACCESS_OEM_METADATA:
+                 return checkPermissionAccessOemMetadata(context, pid, uid, getPackageName(),
+                         attributionTag);
+diff --git a/src/com/android/providers/media/MediaProvider.java b/src/com/android/providers/media/MediaProvider.java
+index ea4ccb7..99e0b63 100644
+--- a/src/com/android/providers/media/MediaProvider.java
++++ b/src/com/android/providers/media/MediaProvider.java
+@@ -88,6 +88,7 @@ import static com.android.providers.media.LocalCallingIdentity.PERMISSION_IS_RED
+ import static com.android.providers.media.LocalCallingIdentity.PERMISSION_IS_SELF;
+ import static com.android.providers.media.LocalCallingIdentity.PERMISSION_IS_SHELL;
+ import static com.android.providers.media.LocalCallingIdentity.PERMISSION_IS_SYSTEM_GALLERY;
++import static com.android.providers.media.LocalCallingIdentity.PERMISSION_MANAGE_MEDIA;
+ import static com.android.providers.media.LocalCallingIdentity.PERMISSION_WRITE_EXTERNAL_STORAGE;
+ import static com.android.providers.media.LocalUriMatcher.AUDIO_ALBUMART;
+ import static com.android.providers.media.LocalUriMatcher.AUDIO_ALBUMART_FILE_ID;
+@@ -334,6 +335,7 @@ import com.android.providers.media.util.Preconditions;
+ import com.android.providers.media.util.RedactionUtils;
+ import com.android.providers.media.util.SQLiteQueryBuilder;
+ import com.android.providers.media.util.SpecialFormatDetector;
++import com.android.providers.media.util.StrictLocationRedactionHelper;
+ import com.android.providers.media.util.StringUtils;
+ import com.android.providers.media.util.UserCache;
+ import com.android.providers.media.util.XAttrUtils;
+@@ -769,6 +771,20 @@ public class MediaProvider extends ContentProvider {
+                 }
+             });
+ 
++    /**
++     * Receiving identity state on the current thread. Populated on demand,
++     * and invalidated by {@link #onCallingPackageChanged()} when each remote
++     * call is finished. Usages of this variable should typically fall back to
++     * mCallingIdentity when it is not set (null). It is set to the identity of
++     * the media capabilities UID when known, if any, i.e. the application
++     * invoking a media/photo picker or otherwise on the receiving end.
++     */
++    private final ThreadLocal<LocalCallingIdentity> mReceivingIdentity = new ThreadLocal();
++
++    private LocalCallingIdentity getReceivingIdentity(int uid) {
++        return LocalCallingIdentity.fromExternal(getContext(), mUserCache, uid);
++    }
++
+     /**
+      * We simply propagate the UID that is being tracked by
+      * {@link LocalCallingIdentity}, which means we accurately blame both
+@@ -786,6 +802,7 @@ public class MediaProvider extends ContentProvider {
+             // we should reset it, the next time it is retrieved it will be created for the
+             // appropriate caller.
+             mCallingIdentity.remove();
++            mReceivingIdentity.remove();
+             return Binder.setCallingWorkSourceUid(Binder.getCallingUid());
+         }
+ 
+@@ -1681,6 +1698,7 @@ public class MediaProvider extends ContentProvider {
+     public void onCallingPackageChanged() {
+         // Identity of the current thread has changed, so invalidate caches
+         mCallingIdentity.remove();
++        mReceivingIdentity.remove();
+     }
+ 
+     public LocalCallingIdentity clearLocalCallingIdentity() {
+@@ -10088,6 +10106,13 @@ public class MediaProvider extends ContentProvider {
+             modeBits |= ParcelFileDescriptor.MODE_READ_WRITE;
+         }
+ 
++        int mediaCapabilitiesUid = opts.getInt(MediaStore.EXTRA_MEDIA_CAPABILITIES_UID);
++        if (mediaCapabilitiesUid != 0 && mediaCapabilitiesUid != mCallingIdentity.get().uid) {
++            final LocalCallingIdentity receivingIdentity = mReceivingIdentity.get();
++            if (receivingIdentity == null || mediaCapabilitiesUid != receivingIdentity.uid) {
++                mReceivingIdentity.set(getReceivingIdentity(mediaCapabilitiesUid));
++            }
++        }
+         final boolean hasOwnerPackageName = hasOwnerPackageName(uri);
+         final String[] projection = new String[] {
+                 MediaColumns.DATA,
+@@ -10138,9 +10163,15 @@ public class MediaProvider extends ContentProvider {
+ 
+         // Yell if caller requires original, since we can't give it to them
+         // unless they have access granted above
++        // Merely warn if strict location redaction is enabled, or apps will crash or fail.
+         if (redactionNeeded && MediaStore.getRequireOriginal(uri)) {
+-            throw new UnsupportedOperationException(
+-                    "Caller must hold ACCESS_MEDIA_LOCATION permission to access original");
++            if (StrictLocationRedactionHelper.getInstance(getContext()).isSettingEnabled()) {
++                Log.w(TAG, "Caller wants access to original media, but it must have "
++                        + "MANAGE_EXTERNAL_STORAGE or MANAGE_MEDIA. Returning redacted anyway.");
++            } else {
++                throw new UnsupportedOperationException(
++                        "Caller must hold ACCESS_MEDIA_LOCATION permission to access original");
++            }
+         }
+ 
+         // Kick off metadata update when writing is finished
+@@ -10175,7 +10206,6 @@ public class MediaProvider extends ContentProvider {
+             final int uid = Binder.getCallingUid();
+             final int transcodeReason = mTranscodeHelper.shouldTranscode(filePath, uid, opts);
+             final boolean shouldTranscode = transcodeReason > 0;
+-            int mediaCapabilitiesUid = opts.getInt(MediaStore.EXTRA_MEDIA_CAPABILITIES_UID);
+             if (!shouldTranscode || mediaCapabilitiesUid < Process.FIRST_APPLICATION_UID) {
+                 // Although 0 is a valid UID, it's not a valid app uid.
+                 // So, we use it to signify that mediaCapabilitiesUid is not set.
+@@ -10275,8 +10305,20 @@ public class MediaProvider extends ContentProvider {
+ 
+         // To be consistent with FUSE redaction checks we allow similar access for File Manager
+         // and System Gallery apps.
+-        if (isCallingPackageManager() || canSystemGalleryAccessTheFile(file.getPath())) {
+-            return false;
++        final String filePath = file.getPath();
++        if (isCallingPackageManager() || canSystemGalleryAccessTheFile(filePath)) {
++            if (!StrictLocationRedactionHelper.getInstance(getContext()).isSettingEnabled()) {
++                return false;
++            }
++            final LocalCallingIdentity receivingIdentity = mReceivingIdentity.get();
++            if (receivingIdentity == null) {
++                return false;
++            }
++            if (receivingIdentity.hasPermission(PERMISSION_IS_MANAGER)
++                    || receivingIdentity.hasPermission(PERMISSION_MANAGE_MEDIA)
++                    || canSystemGalleryAccessTheFile(receivingIdentity, filePath)) {
++                return false;
++            }
+         }
+ 
+         return isRedactionNeeded();
+@@ -10328,17 +10370,28 @@ public class MediaProvider extends ContentProvider {
+         }
+     }
+ 
++    private boolean callingOrReceivingPackageHasPermission(int permission) {
++        if (mCallingIdentity.get().hasPermission(permission)) {
++            return true;
++        }
++        if (!StrictLocationRedactionHelper.getInstance(getContext()).isSettingEnabled()) {
++            return false;
++        }
++        final LocalCallingIdentity receivingIdentity = mReceivingIdentity.get();
++        return receivingIdentity != null && receivingIdentity.hasPermission(permission);
++    }
++
+     @Deprecated
+     private boolean isRedactionNeeded(Uri uri) {
+-        return mCallingIdentity.get().hasPermission(PERMISSION_IS_REDACTION_NEEDED);
++        return callingOrReceivingPackageHasPermission(PERMISSION_IS_REDACTION_NEEDED);
+     }
+ 
+     private boolean isRedactionNeeded() {
+-        return mCallingIdentity.get().hasPermission(PERMISSION_IS_REDACTION_NEEDED);
++        return callingOrReceivingPackageHasPermission(PERMISSION_IS_REDACTION_NEEDED);
+     }
+ 
+     private boolean isCallingPackageRequestingLegacy() {
+-        return mCallingIdentity.get().hasPermission(PERMISSION_IS_LEGACY_GRANTED);
++        return mCallingIdentity.get().hasPermission(PERMISSION_IS_LEGACY_GRANTED); // guard
+     }
+ 
+     private boolean shouldBypassDatabase(int uid) {
+@@ -10377,6 +10430,18 @@ public class MediaProvider extends ContentProvider {
+             mediaType ==  FileColumns.MEDIA_TYPE_VIDEO;
+     }
+ 
++    private boolean canSystemGalleryAccessTheFile(LocalCallingIdentity identity,
++            String filePath) {
++        if (!isSystemGallery(identity)) {
++            return false;
++        }
++
++        final int mediaType = getFileMediaType(filePath);
++
++        return mediaType ==  FileColumns.MEDIA_TYPE_IMAGE ||
++            mediaType ==  FileColumns.MEDIA_TYPE_VIDEO;
++    }
++
+     /**
+      * Returns true if:
+      * <ul>
+@@ -12177,6 +12242,17 @@ public class MediaProvider extends ContentProvider {
+         return false;
+     }
+ 
++    /** Unrolled version of isCallingPackageSystemGallery that checks the given identity. */
++    private boolean isSystemGallery(LocalCallingIdentity identity) {
++        if (identity.hasPermission(PERMISSION_IS_SYSTEM_GALLERY)) {
++            if (identity.hasPermission(PERMISSION_IS_LEGACY_GRANTED)) {
++                return identity.hasPermission(PERMISSION_IS_LEGACY_WRITE);
++            }
++            return true;
++        }
++        return false;
++    }
++
+     private int getCallingUidOrSelf() {
+         return mCallingIdentity.get().uid;
+     }
+@@ -12237,7 +12313,7 @@ public class MediaProvider extends ContentProvider {
+ 
+     @Deprecated
+     private boolean isCallingPackageLegacyWrite() {
+-        return mCallingIdentity.get().hasPermission(PERMISSION_IS_LEGACY_WRITE);
++        return mCallingIdentity.get().hasPermission(PERMISSION_IS_LEGACY_WRITE); // guard
+     }
+ 
+     @Override
+diff --git a/src/com/android/providers/media/util/PermissionUtils.java b/src/com/android/providers/media/util/PermissionUtils.java
+index 3a272ee..7a73ea8 100644
+--- a/src/com/android/providers/media/util/PermissionUtils.java
++++ b/src/com/android/providers/media/util/PermissionUtils.java
+@@ -49,9 +49,13 @@ import android.app.DownloadManager;
+ import android.content.Context;
+ import android.content.pm.PackageInfo;
+ import android.content.pm.PackageManager;
++import android.database.ContentObserver;
+ import android.os.UserHandle;
+ import android.provider.MediaStore;
++import android.provider.Settings;
++import android.util.Log;
+ 
++import androidx.annotation.GuardedBy;
+ import androidx.annotation.NonNull;
+ import androidx.annotation.Nullable;
+ import androidx.annotation.VisibleForTesting;
+@@ -155,10 +159,19 @@ public class PermissionUtils {
+     public static boolean checkPermissionAccessMediaLocation(@NonNull Context context, int pid,
+             int uid, @NonNull String packageName, @Nullable String attributionTag,
+             boolean isTargetSdkAtLeastT) {
+-        return checkPermissionForDataDelivery(context, ACCESS_MEDIA_LOCATION, pid, uid, packageName,
++        final boolean hasAccessMediaLocation = checkPermissionForDataDelivery(
++                context, ACCESS_MEDIA_LOCATION, pid, uid, packageName,
+                 attributionTag, generateAppOpMessage(packageName, sOpDescription.get()))
+                 || checkPermissionAccessMediaCompatGrant(context, pid, uid, packageName,
+                 attributionTag, isTargetSdkAtLeastT);
++        // We want to be as strict as or stricter than this. This means that even if the app can
++        // manage media, that's not enough if it is missing ACCESS_MEDIA_LOCATION.
++        if (!hasAccessMediaLocation) {
++            return false;
++        }
++        return !StrictLocationRedactionHelper.getInstance(context).isSettingEnabled()
++                || checkPermissionManager(context, pid, uid, packageName, attributionTag)
++                || checkPermissionManageMedia(context, pid, uid, packageName, attributionTag);
+     }
+ 
+     /**
+diff --git a/src/com/android/providers/media/util/StrictLocationRedactionHelper.java b/src/com/android/providers/media/util/StrictLocationRedactionHelper.java
+new file mode 100644
+index 0000000..6dcdb0c
+--- /dev/null
++++ b/src/com/android/providers/media/util/StrictLocationRedactionHelper.java
+@@ -0,0 +1,84 @@
++/*
++ * Copyright (C) 2024 The Calyx Institute
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.providers.media.util;
++
++import android.content.Context;
++import android.database.ContentObserver;
++import android.os.Handler;
++import android.os.Looper;
++import android.provider.Settings;
++
++/** Cache the value of the STRICT_LOCATION_REDACTION setting for quick retrieval */
++public class StrictLocationRedactionHelper {
++    // Settings.Secure.STRICT_LOCATION_REDACTION
++    private static final String STRICT_LOCATION_REDACTION = "strict_location_redaction";
++    private static final int DEFAULT_VALUE = 1;
++
++    public static StrictLocationRedactionHelper sInstance;
++
++    private volatile Boolean mIsSettingEnabled;
++    private final Context mContext;
++    private final Handler mHandler;
++    private final SettingObserver mSettingObserver;
++
++    private StrictLocationRedactionHelper(final Context context) {
++        mContext = context;
++        mHandler = new Handler(Looper.getMainLooper());
++        mSettingObserver = new SettingObserver();
++        mHandler.post(() -> {
++            mIsSettingEnabled = fetchCurrentSettingEnabled();
++        });
++    }
++
++    public static StrictLocationRedactionHelper getInstance(final Context context) {
++        synchronized (StrictLocationRedactionHelper.class) {
++            if (sInstance == null) {
++                sInstance = new StrictLocationRedactionHelper(context);
++            }
++            return sInstance;
++        }
++    }
++
++    /**
++     * Returns {@code true} if the strict location redaction feature is enabled (default if unset).
++     */
++    public boolean isSettingEnabled() {
++        if (mIsSettingEnabled == null) {
++            return fetchCurrentSettingEnabled();
++        }
++        return mIsSettingEnabled == true;
++    }
++
++    private boolean fetchCurrentSettingEnabled() {
++        return Settings.Secure.getInt(mContext.getContentResolver(), STRICT_LOCATION_REDACTION,
++                /* def */ DEFAULT_VALUE) != 0;
++    }
++
++    private final class SettingObserver extends ContentObserver {
++        SettingObserver() {
++            super(mHandler);
++            mContext.getContentResolver().registerContentObserver(
++                    Settings.Secure.getUriFor(STRICT_LOCATION_REDACTION),
++                    /* notifyForDescendants */ false,
++                    this);
++        }
++
++        public void onChange(boolean selfChange) {
++            mIsSettingEnabled = fetchCurrentSettingEnabled();
++        }
++    }
++}
+-- 
+2.43.0
+

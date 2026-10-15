@@ -1,0 +1,293 @@
+From 5682a315f604e766c6ecc3d4519eed3766cddc5b Mon Sep 17 00:00:00 2001
+From: Oliver Scott <olivercscott@gmail.com>
+Date: Thu, 12 Sep 2024 15:28:26 -0400
+Subject: [PATCH] Camera timeout feature
+
+Issue: calyxos#1613
+Issue: calyxos#1597
+Change-Id: I7de977cbf0715c257e1f7b6903f517e8e928e39c
+---
+ .../res/values/calyx_arrays.xml               | 50 +++++++++++++++++++
+ .../res/values/calyx_strings.xml              | 26 ++++++++++
+ .../res/xml-v34/privacy_subpage.xml           |  7 +++
+ .../res/xml/privacy_controls.xml              |  8 +++
+ .../ui/PrivacyControlsFragment.java           | 10 ++++
+ .../safetycenter/ui/PrivacySubpageFragment.kt | 13 +++++
+ .../ui/model/PrivacyControlsViewModel.kt      | 43 ++++++++++++++++
+ 7 files changed, 157 insertions(+)
+ create mode 100644 PermissionController/res/values/calyx_arrays.xml
+ create mode 100644 PermissionController/res/values/calyx_strings.xml
+
+diff --git a/PermissionController/res/values/calyx_arrays.xml b/PermissionController/res/values/calyx_arrays.xml
+new file mode 100644
+index 0000000000..fb73b7d388
+--- /dev/null
++++ b/PermissionController/res/values/calyx_arrays.xml
+@@ -0,0 +1,50 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: The Calyx Institute
++     SPDX-License-Identifier: Apache-2.0
++-->
++<resources>
++    <!-- Timeout entries. The delay in inactivity before camera is turned off. These are shown in a list dialog. -->
++    <string-array name="timeout_entries" translatable="false">
++        <item>@string/timeout_summary_never</item>
++        <item>@string/timeout_summary_15secs</item>
++        <item>@string/timeout_summary_30secs</item>
++        <item>@string/timeout_summary_1min</item>
++        <item>@string/timeout_summary_2mins</item>
++        <item>@string/timeout_summary_5mins</item>
++        <item>@string/timeout_summary_10mins</item>
++        <item>@string/timeout_summary_30mins</item>
++        <item>@string/timeout_summary_1hour</item>
++        <item>@string/timeout_summary_2hours</item>
++        <item>@string/timeout_summary_4hours</item>
++        <item>@string/timeout_summary_8hours</item>
++    </string-array>
++
++    <!-- Do not translate. -->
++    <string-array name="timeout_values" translatable="false">
++        <!-- Do not translate. -->
++        <item>0</item>
++        <!-- Do not translate. -->
++        <item>15000</item>
++        <!-- Do not translate. -->
++        <item>30000</item>
++        <!-- Do not translate. -->
++        <item>60000</item>
++        <!-- Do not translate. -->
++        <item>120000</item>
++        <!-- Do not translate. -->
++        <item>300000</item>
++        <!-- Do not translate. -->
++        <item>600000</item>
++        <!-- Do not translate. -->
++        <item>1800000</item>
++        <!-- Do not translate. -->
++        <item>3600000</item>
++        <!-- Do not translate. -->
++        <item>7200000</item>
++        <!-- Do not translate. -->
++        <item>14400000</item>
++        <!-- Do not translate. -->
++        <item>28800000</item>
++    </string-array>
++</resources>
+diff --git a/PermissionController/res/values/calyx_strings.xml b/PermissionController/res/values/calyx_strings.xml
+new file mode 100644
+index 0000000000..9f96333c63
+--- /dev/null
++++ b/PermissionController/res/values/calyx_strings.xml
+@@ -0,0 +1,26 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     SPDX-FileCopyrightText: The Calyx Institute
++     SPDX-License-Identifier: Apache-2.0
++-->
++<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
++    <!-- Timeout entries -->
++    <string name="timeout_summary_never">Never</string>
++    <string name="timeout_summary_15secs">15 seconds</string>
++    <string name="timeout_summary_30secs">30 seconds</string>
++    <string name="timeout_summary_1min">1 minute</string>
++    <string name="timeout_summary_2mins">2 minutes</string>
++    <string name="timeout_summary_5mins">5 minutes</string>
++    <string name="timeout_summary_10mins">10 minutes</string>
++    <string name="timeout_summary_30mins">30 minutes</string>
++    <string name="timeout_summary_1hour">1 hour</string>
++    <string name="timeout_summary_2hours">2 hours</string>
++    <string name="timeout_summary_4hours">4 hours</string>
++    <string name="timeout_summary_8hours">8 hours</string>
++
++    <!-- Label for the camera timeout list [CHAR LIMIT=40] -->
++    <string name="camera_timeout_title">Camera timeout</string>
++    <!-- Describes the camera timeout [CHAR LIMIT=NONE] -->
++    <string name="camera_timeout_description">Camera access will turn off after <xliff:g id="timeout_description">%1$s</xliff:g> if not in use</string>
++    <string name="camera_timeout_description2">Camera access will not turn off automatically</string>
++</resources>
+diff --git a/PermissionController/res/xml-v34/privacy_subpage.xml b/PermissionController/res/xml-v34/privacy_subpage.xml
+index 0aec164ced..f72b11ad30 100644
+--- a/PermissionController/res/xml-v34/privacy_subpage.xml
++++ b/PermissionController/res/xml-v34/privacy_subpage.xml
+@@ -39,6 +39,13 @@
+             android:title="@string/camera_toggle_title"
+             android:summary="@string/perm_toggle_description" />
+ 
++        <androidx.preference.ListPreference
++            android:key="privacy_camera_timeout"
++            android:title="@string/camera_timeout_title"
++            android:summary="@string/camera_timeout_description"
++            android:entries="@array/timeout_entries"
++            android:entryValues="@array/timeout_values" />
++
+         <com.android.permissioncontroller.safetycenter.ui.ClickableDisabledSwitchPreference
+             android:key="privacy_mic_toggle"
+             android:title="@string/mic_toggle_title"
+diff --git a/PermissionController/res/xml/privacy_controls.xml b/PermissionController/res/xml/privacy_controls.xml
+index 48dc8f180a..6428a1acd0 100644
+--- a/PermissionController/res/xml/privacy_controls.xml
++++ b/PermissionController/res/xml/privacy_controls.xml
+@@ -26,6 +26,14 @@
+         android:title="@string/camera_toggle_title"
+         android:summary="@string/perm_toggle_description" />
+ 
++    <!-- Camera timeout list -->
++    <androidx.preference.ListPreference
++        android:key="privacy_camera_timeout"
++        android:title="@string/camera_timeout_title"
++        android:summary="@string/camera_timeout_description"
++        android:entries="@array/timeout_entries"
++        android:entryValues="@array/timeout_values" />
++
+     <!-- Microphone toggle -->
+     <com.android.permissioncontroller.safetycenter.ui.ClickableDisabledSwitchPreference
+         android:key="privacy_mic_toggle"
+diff --git a/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/PrivacyControlsFragment.java b/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/PrivacyControlsFragment.java
+index 43a8877d4c..fb197287c8 100644
+--- a/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/PrivacyControlsFragment.java
++++ b/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/PrivacyControlsFragment.java
+@@ -21,6 +21,7 @@ import android.os.Bundle;
+ 
+ import androidx.annotation.RequiresApi;
+ import androidx.lifecycle.ViewModelProvider;
++import androidx.preference.ListPreference;
+ import androidx.preference.PreferenceFragmentCompat;
+ 
+ import com.android.permissioncontroller.R;
+@@ -29,6 +30,7 @@ import com.android.permissioncontroller.safetycenter.ui.model.PrivacyControlsVie
+ import com.android.permissioncontroller.safetycenter.ui.model.PrivacyControlsViewModel.PrefState;
+ import com.android.permissioncontroller.safetycenter.ui.model.PrivacyControlsViewModelFactory;
+ 
++import java.util.List;
+ import java.util.Map;
+ 
+ /** Fragment that shows several privacy toggle controls, alongside a link to location settings */
+@@ -73,6 +75,14 @@ public final class PrivacyControlsFragment extends PreferenceFragmentCompat {
+                             mViewModel.handlePrefClick(this, Pref.LOCATION, null);
+                             return true;
+                         });
++
++        for (Pref pref : List.of(Pref.CAMERA_TIMEOUT)) {
++            ListPreference sensorTimeout = findPreference(pref.getKey());
++            mViewModel.setSensorTimeout(sensorTimeout);
++            sensorTimeout.setOnPreferenceChangeListener(
++                    (preference, newValue) -> mViewModel.setSensorTimeout(sensorTimeout,
++                            Long.parseLong((String) newValue)));
++        }
+     }
+ 
+     private void setSwitchPreference(Map<Pref, PrefState> prefStates, Pref prefType) {
+diff --git a/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/PrivacySubpageFragment.kt b/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/PrivacySubpageFragment.kt
+index ee23d3131f..e8f1f43282 100644
+--- a/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/PrivacySubpageFragment.kt
++++ b/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/PrivacySubpageFragment.kt
+@@ -22,6 +22,7 @@ import android.safetycenter.SafetyCenterEntryGroup
+ import android.util.Log
+ import androidx.annotation.RequiresApi
+ import androidx.lifecycle.ViewModelProvider
++import androidx.preference.ListPreference
+ import androidx.preference.Preference
+ import androidx.preference.PreferenceGroup
+ import com.android.permissioncontroller.Constants.EXTRA_SESSION_ID
+@@ -171,6 +172,18 @@ class PrivacySubpageFragment : SafetyCenterFragment() {
+             privacyControlsViewModel.handlePrefClick(this, Pref.LOCATION, null)
+             true
+         }
++
++        val timeoutEntries = listOf(Pref.CAMERA_TIMEOUT)
++        timeoutEntries.forEach { timeoutEntry ->
++            val timeoutPreference: ListPreference? = findPreference(timeoutEntry.key)
++            if (timeoutPreference != null) {
++                privacyControlsViewModel.setSensorTimeout(timeoutPreference)
++            }
++            timeoutPreference?.setOnPreferenceChangeListener { _, newValue ->
++                privacyControlsViewModel.setSensorTimeout(timeoutPreference,
++                    (newValue as String).toLong())
++            }
++        }
+     }
+ 
+     companion object {
+diff --git a/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/model/PrivacyControlsViewModel.kt b/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/model/PrivacyControlsViewModel.kt
+index 619da1cbd2..70d93545d4 100644
+--- a/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/model/PrivacyControlsViewModel.kt
++++ b/PermissionController/src/com/android/permissioncontroller/safetycenter/ui/model/PrivacyControlsViewModel.kt
+@@ -34,6 +34,7 @@ import androidx.fragment.app.Fragment
+ import androidx.lifecycle.AndroidViewModel
+ import androidx.lifecycle.ViewModel
+ import androidx.lifecycle.ViewModelProvider
++import androidx.preference.ListPreference
+ import com.android.modules.utils.build.SdkLevel
+ import com.android.permission.flags.Flags
+ import com.android.permissioncontroller.R
+@@ -60,10 +61,12 @@ class PrivacyControlsViewModel(private val app: Application) : AndroidViewModel(
+         app.getString(R.string.show_access_notifications_default_config)
+     private val CONFIG_MIC_TOGGLE_ENABLED = app.getString(R.string.mic_toggle_enable_config)
+     private val CONFIG_CAMERA_TOGGLE_ENABLED = app.getString(R.string.camera_toggle_enable_config)
++    private val CAMERA_OFF_TIMEOUT = "camera_off_timeout" // Settings.Secure.CAMERA_OFF_TIMEOUT
+ 
+     enum class Pref(val key: String, @StringRes val titleResId: Int) {
+         MIC("privacy_mic_toggle", R.string.mic_toggle_title),
+         CAMERA("privacy_camera_toggle", R.string.camera_toggle_title),
++        CAMERA_TIMEOUT("privacy_camera_timeout", R.string.camera_timeout_title),
+         LOCATION("privacy_location_access", R.string.location_settings),
+         CLIPBOARD("show_clip_access_notification", R.string.show_clip_access_notification_title),
+         SHOW_PASSWORD("show_password", R.string.show_password_title);
+@@ -129,6 +132,7 @@ class PrivacyControlsViewModel(private val app: Application) : AndroidViewModel(
+             Pref.LOCATION -> goToLocation(fragment)
+             Pref.CLIPBOARD -> toggleClipboard()
+             Pref.SHOW_PASSWORD -> toggleShowPassword()
++            Pref.CAMERA_TIMEOUT -> {}
+         }
+     }
+ 
+@@ -218,6 +222,45 @@ class PrivacyControlsViewModel(private val app: Application) : AndroidViewModel(
+     private fun shouldDisplayShowPasswordToggle(): Boolean {
+         return app.resources.getBoolean(R.bool.config_display_show_password_toggle)
+     }
++
++    fun setSensorTimeout(preference: ListPreference) {
++        var sensorTimeout = ""
++        when (preference.getKey()) {
++            Pref.CAMERA_TIMEOUT.key -> sensorTimeout = CAMERA_OFF_TIMEOUT
++        }
++        setSensorTimeout(preference, Settings.Secure.getLong(app.contentResolver, sensorTimeout, 0))
++    }
++
++    fun setSensorTimeout(preference: ListPreference, timeout: Long): Boolean {
++        var sensorTimeout = ""
++        var timeoutDescription = -1
++        when (preference.getKey()) {
++            Pref.CAMERA_TIMEOUT.key -> {
++                sensorTimeout = CAMERA_OFF_TIMEOUT
++                timeoutDescription =
++                    if (timeout != 0L) R.string.camera_timeout_description
++                    else R.string.camera_timeout_description2
++            }
++        }
++        if (timeout == 0L) {
++            preference.setSummary(app.getString(timeoutDescription))
++        } else {
++            val values = preference.getEntryValues()
++            for (i in values.indices) {
++                if (timeout == values[i].toString().toLong()) {
++                    preference.setSummary(app.getString(timeoutDescription,
++                        preference.getEntries()[i]))
++                    break
++                }
++            }
++        }
++        preference.setValue(timeout.toString())
++        return Settings.Secure.putLong(
++            app.contentResolver,
++            sensorTimeout,
++            timeout
++        )
++    }
+ }
+ 
+ /**
+-- 
+GitLab
+

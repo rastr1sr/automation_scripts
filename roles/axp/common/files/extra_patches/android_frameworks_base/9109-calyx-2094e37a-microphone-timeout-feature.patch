@@ -1,0 +1,144 @@
+From e2db5d62e47a34675e544c13130ff90fbd1fd97a Mon Sep 17 00:00:00 2001
+From: Oliver Scott <olivercscott@gmail.com>
+Date: Wed, 17 Apr 2024 23:47:06 -0400
+Subject: [PATCH] Microphone timeout feature
+
+Ported to AXP.OS lineage-22.2 (rhodep fork) from GrapheneOS 2094e37a68a6.
+
+Change-Id: Iabc3e417b9fbd6d81212b24f5a480d0411e886cf
+---
+ core/java/android/provider/Settings.java      |  6 ++++
+ .../settings/backup/SecureSettings.java       |  3 +-
+ .../validators/SecureSettingsValidators.java  | 15 +++++++++
+ .../privacy/AppOpsPrivacyItemMonitor.kt       | 32 +++++++++++++++++++
+ 4 files changed, 55 insertions(+), 1 deletion(-)
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 6cec95b08..958dda0f6 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -12917,6 +12917,12 @@ public final class Settings {
+          */
+         public static final String CAMERA_OFF_TIMEOUT = "camera_off_timeout";
+ 
++        /**
++         * The amount of time in milliseconds before mic is turned off
++         * @hide
++         */
++        public static final String MIC_OFF_TIMEOUT = "mic_off_timeout";
++
+         /**
+          * Whether or not secure windows should be disabled. This only works on debuggable builds.
+          *
+diff --git a/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java b/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java
+index 55122a3e9..ba0f4a82d 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java
++++ b/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java
+@@ -289,6 +289,7 @@ public class SecureSettings {
+         Settings.Secure.MANDATORY_BIOMETRICS_REQUIREMENTS_SATISFIED,
+         Settings.Secure.ADVANCED_PROTECTION_MODE,
+         Settings.Secure.ACCESSIBILITY_KEY_GESTURE_TARGETS,
+-        Settings.Secure.CAMERA_OFF_TIMEOUT
++        Settings.Secure.CAMERA_OFF_TIMEOUT,
++        Settings.Secure.MIC_OFF_TIMEOUT
+     };
+ }
+diff --git a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+index c691b55cb..eba8afe46 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
++++ b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+@@ -467,5 +467,20 @@ public class SecureSettingsValidators {
+                         "14400000",
+                         "28800000"
+                 }));
++        VALIDATORS.put(Secure.MIC_OFF_TIMEOUT,
++                new DiscreteValueValidator(new String[] {
++                        "0",
++                        "15000",
++                        "30000",
++                        "60000",
++                        "120000",
++                        "300000",
++                        "600000",
++                        "1800000",
++                        "3600000",
++                        "7200000",
++                        "14400000",
++                        "28800000"
++                }));
+     }
+ }
+diff --git a/packages/SystemUI/src/com/android/systemui/privacy/AppOpsPrivacyItemMonitor.kt b/packages/SystemUI/src/com/android/systemui/privacy/AppOpsPrivacyItemMonitor.kt
+index 0f40aabd7..42c77bf2f 100644
+--- a/packages/SystemUI/src/com/android/systemui/privacy/AppOpsPrivacyItemMonitor.kt
++++ b/packages/SystemUI/src/com/android/systemui/privacy/AppOpsPrivacyItemMonitor.kt
+@@ -107,6 +107,9 @@ class AppOpsPrivacyItemMonitor @Inject constructor(
+                 if (code in OPS_CAMERA && !active) {
+                     setCameraTimeout()
+                 }
++                if (code in OPS_MIC && !active) {
++                    setMicTimeout()
++                }
+                 if (userTracker.userProfiles.any { it.id == UserHandle.getUserId(uid) } ||
+                         code in USER_INDEPENDENT_OPS) {
+                     logger.logUpdatedItemFromAppOps(code, uid, packageName, active)
+@@ -153,8 +156,16 @@ class AppOpsPrivacyItemMonitor @Inject constructor(
+         }
+     }
+ 
++    private val micTimeoutListener = OnAlarmListener {
++        if (getActivePrivacyItems().none { it.privacyType == PrivacyType.TYPE_MICROPHONE }) {
++            context.getSystemService(SensorPrivacyManager::class.java)
++                ?.setSensorPrivacy(SensorPrivacyManager.Sensors.MICROPHONE, true)
++        }
++    }
++
+     init {
+         setCameraTimeout()
++        setMicTimeout()
+         context.contentResolver.registerContentObserver(Settings.Secure.getUriFor(
+                 Settings.Secure.CAMERA_OFF_TIMEOUT), false,
+                 object : ContentObserver(null) {
+@@ -162,11 +173,19 @@ class AppOpsPrivacyItemMonitor @Inject constructor(
+                         setCameraTimeout()
+                     }
+                 })
++        context.contentResolver.registerContentObserver(Settings.Secure.getUriFor(
++                Settings.Secure.MIC_OFF_TIMEOUT), false,
++                object : ContentObserver(null) {
++                    override fun onChange(selfChange: Boolean) {
++                        setMicTimeout()
++                    }
++                })
+         context.getSystemService(SensorPrivacyManager::class.java)
+             ?.addSensorPrivacyListener { sensor, enabled ->
+                 if (!enabled) {
+                     when (sensor) {
+                         SensorPrivacyManager.Sensors.CAMERA -> setCameraTimeout()
++                        SensorPrivacyManager.Sensors.MICROPHONE -> setMicTimeout()
+                     }
+                 }
+             }
+@@ -186,6 +205,19 @@ class AppOpsPrivacyItemMonitor @Inject constructor(
+         }
+     }
+ 
++    private fun setMicTimeout() {
++        val micTimeoutMillis: Long = Settings.Secure.getLong(context.getContentResolver(),
++                Settings.Secure.MIC_OFF_TIMEOUT, 0)
++        val alarmManager: AlarmManager? = context.getSystemService(AlarmManager::class.java)
++        alarmManager?.cancel(micTimeoutListener)
++        if (micTimeoutMillis != 0L) {
++            val timeout: Long = SystemClock.elapsedRealtime() + micTimeoutMillis
++            alarmManager?.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, timeout,
++                    AppOpsPrivacyItemMonitor::class.java.simpleName,
++                    Runnable::run, null, micTimeoutListener)
++        }
++    }
++
+     override fun startListening(callback: PrivacyItemMonitor.Callback) {
+         synchronized(lock) {
+             this.callback = callback
+-- 
+2.43.0
+

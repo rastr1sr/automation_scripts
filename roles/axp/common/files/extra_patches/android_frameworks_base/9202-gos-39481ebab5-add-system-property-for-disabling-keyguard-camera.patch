@@ -1,0 +1,57 @@
+From 39481ebab54c4f0eb11023a79c1fda607ea3c6d2 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Tue, 25 Jul 2017 11:22:33 -0400
+Subject: [PATCH] add system property for disabling keyguard camera
+
+Change-Id: I0b65cac3c3d2fc495b339c34add742bd698b107c
+---
+ core/java/android/ext/settings/ExtSettings.java            | 3 +++
+ .../java/com/android/server/GestureLauncherService.java    | 7 +++++++
+ 2 files changed, 10 insertions(+)
+
+diff --git a/core/java/android/ext/settings/ExtSettings.java b/core/java/android/ext/settings/ExtSettings.java
+index e18af7ee51aad..cc3c7ec30e2d7 100644
+--- a/core/java/android/ext/settings/ExtSettings.java
++++ b/core/java/android/ext/settings/ExtSettings.java
+@@ -28,6 +28,9 @@ public class ExtSettings {
+     public static final BoolSysProperty EXEC_SPAWNING = new BoolSysProperty(
+             "persist.security.exec_spawn", true);
+ 
++    public static final BoolSetting ALLOW_KEYGUARD_CAMERA = new BoolSetting(
++            Setting.Scope.SYSTEM_PROPERTY, "persist.keyguard.camera", true);
++
+     public static final BoolSetting AUTO_GRANT_OTHER_SENSORS_PERMISSION = new BoolSetting(
+             Setting.Scope.PER_USER, Settings.Secure.AUTO_GRANT_OTHER_SENSORS_PERMISSION, true);
+ 
+diff --git a/services/core/java/com/android/server/GestureLauncherService.java b/services/core/java/com/android/server/GestureLauncherService.java
+index ccc44a41759b2..154ec14ad7651 100644
+--- a/services/core/java/com/android/server/GestureLauncherService.java
++++ b/services/core/java/com/android/server/GestureLauncherService.java
+@@ -19,6 +19,7 @@
+ import static com.android.internal.R.integer.config_defaultMinEmergencyGestureTapDurationMillis;
+ 
+ import android.app.ActivityManager;
++import android.app.KeyguardManager;
+ import android.app.StatusBarManager;
+ import android.content.BroadcastReceiver;
+ import android.content.Context;
+@@ -27,6 +28,7 @@
+ import android.content.pm.PackageManager;
+ import android.content.res.Resources;
+ import android.database.ContentObserver;
++import android.ext.settings.ExtSettings;
+ import android.hardware.Sensor;
+ import android.hardware.SensorEvent;
+ import android.hardware.SensorEventListener;
+@@ -635,6 +637,11 @@ public boolean interceptPowerKeyDown(KeyEvent event, boolean interactive,
+     boolean handleCameraGesture(boolean useWakelock, int source) {
+         Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "GestureLauncher:handleCameraGesture");
+         try {
++            if (!ExtSettings.ALLOW_KEYGUARD_CAMERA.get(mContext)) {
++                if (mContext.getSystemService(KeyguardManager.class).isKeyguardLocked()) {
++                    return false;
++                }
++            }
+             boolean userSetupComplete = isUserSetupComplete();
+             if (!userSetupComplete) {
+                 if (DBG) {

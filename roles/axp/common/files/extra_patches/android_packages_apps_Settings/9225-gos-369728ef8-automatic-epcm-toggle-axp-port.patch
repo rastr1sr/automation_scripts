@@ -1,0 +1,48 @@
+From 9944a384a4eec015014469424cb39d650e1caa60 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Sat, 7 Oct 2023 21:28:08 +0300
+Subject: [PATCH] add toggle for automatic exploit protection compatibility
+
+Ported to AXP.OS lineage-22.2 (rhodep fork) from GrapheneOS 369728ef8600.
+
+Change-Id: I02b9fffd5cc13e7536cfa098d8479add802a0683
+---
+ res/values/strings_ext.xml                 | 5 +++++
+ res/xml/more_security_privacy_settings.xml | 7 +++++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index 5bddd9c..2a4a1cf 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -16,4 +16,9 @@
+ 
+     <string name="keyguard_camera_title">Allow camera access when locked</string>
+ 
++    <string name="allow_automatic_per_app_epcm_title">Automatic exploit protection compatibility mode</string>
++
++    <string name="allow_automatic_per_app_epcm_summary">
++"Allow automatically disabling exploit protections for apps that are known to need it"
++    </string>
+ </resources>
+diff --git a/res/xml/more_security_privacy_settings.xml b/res/xml/more_security_privacy_settings.xml
+index 2cc25d0..83db42d 100644
+--- a/res/xml/more_security_privacy_settings.xml
++++ b/res/xml/more_security_privacy_settings.xml
+@@ -232,6 +232,13 @@
+         settings:keywords="@string/keywords_app_pinning"
+         settings:controller="com.android.settings.security.ScreenPinningPreferenceController" />
+ 
++    <SwitchPreferenceCompat
++        android:order="282"
++        android:key="allow_automatic_per_app_epcm"
++        android:title="@string/allow_automatic_per_app_epcm_title"
++        android:summary="@string/allow_automatic_per_app_epcm_summary"
++        settings:boolSettingField="android.ext.settings.ExtSettings ALLOW_DISABLING_HARDENING_VIA_APP_COMPAT_CONFIG" />
++
+     <Preference
+         android:order="300"
+         android:id="@+id/memtag_page"
+-- 
+2.43.0
+

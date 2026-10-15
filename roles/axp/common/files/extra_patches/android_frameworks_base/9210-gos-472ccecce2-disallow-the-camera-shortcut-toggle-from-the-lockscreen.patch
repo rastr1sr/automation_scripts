@@ -1,0 +1,32 @@
+From 472ccecce2840969306e09764442c65a375b4a9d Mon Sep 17 00:00:00 2001
+From: Neel Chauhan <neel@neelc.org>
+Date: Mon, 27 May 2024 21:24:28 -0400
+Subject: [PATCH] Disallow the camera shortcut toggle from the lockscreen
+
+Closes https://github.com/GrapheneOS/os-issue-tracker/issues/2508
+---
+ .../src/com/android/systemui/camera/CameraGestureHelper.kt    | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/camera/CameraGestureHelper.kt b/packages/SystemUI/src/com/android/systemui/camera/CameraGestureHelper.kt
+index a31e61f67e476..f73f450cff405 100644
+--- a/packages/SystemUI/src/com/android/systemui/camera/CameraGestureHelper.kt
++++ b/packages/SystemUI/src/com/android/systemui/camera/CameraGestureHelper.kt
+@@ -25,6 +25,7 @@ import android.content.Context
+ import android.content.Intent
+ import android.content.pm.PackageManager
+ import android.content.pm.ResolveInfo
++import android.ext.settings.ExtSettings
+ import android.os.RemoteException
+ import android.util.Log
+ import android.view.WindowManager
+@@ -95,6 +96,9 @@ constructor(
+                 intent,
+                 selectedUserInteractor.getSelectedUserId()
+             )
++        if (!ExtSettings.ALLOW_KEYGUARD_CAMERA.get(context) && !keyguardStateController.isUnlocked()) {
++            return
++        }
+         if (CameraIntents.isSecureCameraIntent(intent) && !wouldLaunchResolverActivity) {
+             uiExecutor.execute {
+                 // Normally an activity will set its requested rotation animation on its window.

@@ -1,0 +1,27 @@
+From 915ed0efb7d19471ab62923e5e8d3be3f523e5be Mon Sep 17 00:00:00 2001
+From: Rastrisr <rastrisr@tutamail.com>
+Date: Thu, 15 Oct 2026 02:06:47 +0000
+Subject: [PATCH] label persist.keyguard.camera as system_prop
+
+Same as GrapheneOS; needed so Settings can toggle lockscreen camera access (fw/b 39481ebab5).
+
+Change-Id: Ieb0de9b967a34924f19a2d4d6ea3fba57d67455e
+---
+ private/property_contexts | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/private/property_contexts b/private/property_contexts
+index cda31f5..2eece31 100644
+--- a/private/property_contexts
++++ b/private/property_contexts
+@@ -62,6 +62,7 @@ persist.nfc_cfg.        u:object_r:nfc_prop:s0
+ persist.debug.          u:object_r:persist_debug_prop:s0
+ persist.debug.user_mode_emulation u:object_r:system_user_mode_emulation_prop:s0
+ persist.native_debug    u:object_r:system_prop:s0
++persist.keyguard.camera u:object_r:system_prop:s0
+ logd.                   u:object_r:logd_prop:s0
+ persist.logd.           u:object_r:logd_prop:s0
+ ro.logd.                u:object_r:logd_prop:s0
+-- 
+2.43.0
+

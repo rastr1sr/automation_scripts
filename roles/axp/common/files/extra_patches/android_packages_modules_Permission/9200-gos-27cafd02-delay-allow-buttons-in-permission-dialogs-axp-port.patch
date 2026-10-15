@@ -1,0 +1,84 @@
+From c3d68b1e5868e171cb9fe7fb7e52442f0c19bbc2 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Thu, 5 Dec 2024 15:26:17 +0200
+Subject: [PATCH] delay activation of Allow button(s) in runtime permission
+
+Ported to AXP.OS lineage-22.2 (rhodep fork) from GrapheneOS 27cafd02868d.
+
+Change-Id: I169ce04a51b52bb744a3f4db1bc9948205f9cbf2
+---
+ .../ui/GrantPermissionsActivity.java          | 14 +++++++++++
+ .../GrantPermissionsViewHandlerImpl.kt        | 24 +++++++++++++++----
+ 2 files changed, 33 insertions(+), 5 deletions(-)
+
+diff --git a/PermissionController/src/com/android/permissioncontroller/permission/ui/GrantPermissionsActivity.java b/PermissionController/src/com/android/permissioncontroller/permission/ui/GrantPermissionsActivity.java
+index c1479ca..6a5f402 100644
+--- a/PermissionController/src/com/android/permissioncontroller/permission/ui/GrantPermissionsActivity.java
++++ b/PermissionController/src/com/android/permissioncontroller/permission/ui/GrantPermissionsActivity.java
+@@ -138,6 +138,20 @@ public class GrantPermissionsActivity extends SettingsActivity
+     public static final int LINK_TO_SETTINGS = 10;
+     public static final int ALLOW_ALL_BUTTON = 11; // button for options with a picker, allow all
+     public static final int ALLOW_SELECTED_BUTTON = 12; // allow selected, with picker
++
++    public static boolean isAllowButton(int id) {
++        switch (id) {
++            case ALLOW_BUTTON:
++            case ALLOW_ALWAYS_BUTTON:
++            case ALLOW_FOREGROUND_BUTTON:
++            case ALLOW_ONE_TIME_BUTTON:
++            case ALLOW_ALL_BUTTON:
++            case ALLOW_SELECTED_BUTTON:
++                return true;
++            default:
++                return false;
++        }
++    }
+     // button to cancel a request for more data with a picker
+     public static final int DONT_ALLOW_MORE_SELECTED_BUTTON = 13;
+     public static final int LINK_TO_PERMISSION_RATIONALE = 14;
+diff --git a/PermissionController/src/com/android/permissioncontroller/permission/ui/handheld/GrantPermissionsViewHandlerImpl.kt b/PermissionController/src/com/android/permissioncontroller/permission/ui/handheld/GrantPermissionsViewHandlerImpl.kt
+index bb698b4..d65a0ea 100644
+--- a/PermissionController/src/com/android/permissioncontroller/permission/ui/handheld/GrantPermissionsViewHandlerImpl.kt
++++ b/PermissionController/src/com/android/permissioncontroller/permission/ui/handheld/GrantPermissionsViewHandlerImpl.kt
+@@ -26,6 +26,7 @@ import android.os.Bundle
+ import android.text.method.LinkMovementMethod
+ import android.transition.ChangeBounds
+ import android.transition.TransitionManager
++import android.util.Log
+ import android.util.SparseIntArray
+ import android.view.Gravity
+ import android.view.LayoutInflater
+@@ -339,12 +340,25 @@ class GrantPermissionsViewHandlerImpl(
+     private fun updateButtons() {
+         for (i in 0 until BUTTON_RES_ID_TO_NUM.size()) {
+             val pos = BUTTON_RES_ID_TO_NUM.valueAt(i)
+-            buttons[pos]?.visibility =
+-                if (buttonVisibilities[pos]) {
+-                    View.VISIBLE
+-                } else {
+-                    View.GONE
++            val button = buttons[pos]!!
++            val buttonVisible = buttonVisibilities[pos]
++
++            button.visibility = if (buttonVisible) View.VISIBLE else View.GONE
++
++            if (buttonVisible && GrantPermissionsActivity.isAllowButton(pos)) {
++                button.isEnabled = false
++
++                val shouldLog = Log.isLoggable(TAG, Log.DEBUG)
++                val suffix = "$pos, pkg ${mActivity.callingPackage}, group $groupName"
++                if (shouldLog) Log.d(TAG, "temporarily disabled button $suffix")
++
++                val action = Runnable {
++                    button.isEnabled = true
++                    if (shouldLog) Log.d(TAG, "enabled button $suffix")
+                 }
++                button.postDelayed(action, 1000)
++            }
++
+             if (pos == ALLOW_FOREGROUND_BUTTON && buttonVisibilities[pos]) {
+                 if (
+                     locationVisibilities[LOCATION_ACCURACY_LAYOUT] &&
+-- 
+2.43.0
+

@@ -1,0 +1,41 @@
+From f1f67fee2f37325aab411d47ec6424160b82a10b Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Tue, 14 Feb 2023 10:27:56 +0200
+Subject: [PATCH] add a toggle for camera access from the lock screen
+
+Ported to AXP.OS lineage-22.2 (rhodep fork) from GrapheneOS daf097c02c6b.
+
+Change-Id: If13fa5479810df01075c3e227f3c155225d6a673
+---
+ res/values/strings_ext.xml       | 2 ++
+ res/xml/screen_lock_settings.xml | 5 +++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index 905db5a..5bddd9c 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -14,4 +14,6 @@
+     <string name="app_exploit_protection_category">App exploit protection</string>
+ 
+ 
++    <string name="keyguard_camera_title">Allow camera access when locked</string>
++
+ </resources>
+diff --git a/res/xml/screen_lock_settings.xml b/res/xml/screen_lock_settings.xml
+index d7187ca..366612e 100644
+--- a/res/xml/screen_lock_settings.xml
++++ b/res/xml/screen_lock_settings.xml
+@@ -73,4 +73,9 @@
+         android:entryValues="@array/maximum_failed_passwords_for_wipe_values"
+         android:defaultValue="0" />
+ 
++    <SwitchPreferenceCompat
++        android:key="allow_keyguard_camera"
++        android:title="@string/keyguard_camera_title"
++        settings:boolSettingField="android.ext.settings.ExtSettings ALLOW_KEYGUARD_CAMERA" />
++
+ </PreferenceScreen>
+-- 
+2.43.0
+

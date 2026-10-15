@@ -1,0 +1,43 @@
+From fe905b56a48fb10656f41ed49e8af1efdf4620af Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Wed, 27 Nov 2024 17:29:25 +0200
+Subject: [PATCH] never allow contacts access by default in Bluetooth pairing
+
+Ported to AXP.OS lineage-22.2 (rhodep fork) from GrapheneOS cd1477891bb9.
+
+Change-Id: Ic9d9fd75f814196afcb53af42b9ca08868d66b4b
+---
+ .../settings/bluetooth/BluetoothPairingController.java | 10 ++--------
+ 1 file changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/src/com/android/settings/bluetooth/BluetoothPairingController.java b/src/com/android/settings/bluetooth/BluetoothPairingController.java
+index f141bcc..c0c15ff 100644
+--- a/src/com/android/settings/bluetooth/BluetoothPairingController.java
++++ b/src/com/android/settings/bluetooth/BluetoothPairingController.java
+@@ -233,10 +233,7 @@ public class BluetoothPairingController implements OnCheckedChangeListener,
+             case BluetoothDevice.ACCESS_REJECTED:
+                 return false;
+             default:
+-                if (BluetoothUtils.isDeviceClassMatched(
+-                        mDevice, BluetoothClass.Device.AUDIO_VIDEO_HANDSFREE)) {
+-                    return BluetoothDevice.EXTRA_PAIRING_INITIATOR_FOREGROUND == mInitiator;
+-                }
++                // never allow contacts access by default (GrapheneOS cd1477891)
+                 return false;
+         }
+     }
+@@ -247,10 +244,7 @@ public class BluetoothPairingController implements OnCheckedChangeListener,
+      */
+      public void setContactSharingState() {
+          final int permission = mDevice.getPhonebookAccessPermission();
+-         if (permission == BluetoothDevice.ACCESS_ALLOWED
+-                 || (permission == BluetoothDevice.ACCESS_UNKNOWN
+-                 && BluetoothUtils.isDeviceClassMatched(mDevice,
+-                 BluetoothClass.Device.AUDIO_VIDEO_HANDSFREE))) {
++         if (permission == BluetoothDevice.ACCESS_ALLOWED) {
+              onCheckedChanged(null, true);
+          } else {
+              onCheckedChanged(null, false);
+-- 
+2.43.0
+

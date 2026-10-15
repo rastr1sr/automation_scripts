@@ -1,0 +1,75 @@
+From 6f0a4867af401a37c08b51b8006e1461c3dbe0bb Mon Sep 17 00:00:00 2001
+From: Cosmin Tanislav <demonsingur@gmail.com>
+Date: Sun, 26 Jun 2022 23:30:07 +0300
+Subject: [PATCH] input: touchscreen: mmi: handle low-power notifications
+
+Change-Id: Id164d59fb8ff4b0c033f6eac903acac4bb93b310
+---
+ .../touchscreen_mmi/touchscreen_mmi_notif.c          | 12 ++++++++----
+ include/linux/touchscreen_mmi.h                      |  3 +++
+ 2 files changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/input/touchscreen/touchscreen_mmi/touchscreen_mmi_notif.c b/drivers/input/touchscreen/touchscreen_mmi/touchscreen_mmi_notif.c
+index 5caa363a9..4d4319bb1 100644
+--- a/drivers/input/touchscreen/touchscreen_mmi/touchscreen_mmi_notif.c
++++ b/drivers/input/touchscreen/touchscreen_mmi/touchscreen_mmi_notif.c
+@@ -187,15 +187,17 @@ static void ts_mmi_panel_cb(enum panel_event_notifier_tag tag,
+ 
+ 	dev_dbg(DEV_MMI, "%s: %s Notify_type=%d, early=%d, ctrl_dsi=%d\n", __func__,
+ 		EVENT_PRE_DISPLAY_OFF ? "EVENT_PRE_DISPLAY_OFF" :
++		(EVENT_DISPLAY_LP ? "EVENT_DISPLAY_LP" :
+ 		(EVENT_DISPLAY_OFF ?     "EVENT_DISPLAY_OFF" :
+ 		(EVENT_PRE_DISPLAY_ON ?   "EVENT_PRE_DISPLAY_ON" :
+-		(EVENT_DISPLAY_ON ?       "EVENT_DISPLAY_ON" : "Unknown"))),
++		(EVENT_DISPLAY_ON ?       "EVENT_DISPLAY_ON" : "Unknown")))),
+ 		event, (evdata.early_trigger ? 1 : 0), touch_cdev->pdata.ctrl_dsi);
+ 
+ 	panel_event = EVENT_PRE_DISPLAY_OFF ? TS_MMI_EVENT_PRE_DISPLAY_OFF :
++		(EVENT_DISPLAY_LP ? TS_MMI_EVENT_PRE_DISPLAY_OFF :
+ 		(EVENT_DISPLAY_OFF ? TS_MMI_EVENT_DISPLAY_OFF :
+ 		(EVENT_PRE_DISPLAY_ON ? TS_MMI_EVENT_PRE_DISPLAY_ON :
+-		(EVENT_DISPLAY_ON ? TS_MMI_EVENT_DISPLAY_ON : TS_MMI_EVENT_UNKNOWN)));
++		(EVENT_DISPLAY_ON ? TS_MMI_EVENT_DISPLAY_ON : TS_MMI_EVENT_UNKNOWN))));
+ 
+ 	ts_mmi_panel_event_handle(touch_cdev, panel_event);
+ 
+@@ -218,18 +220,20 @@ static int ts_mmi_panel_cb(struct notifier_block *nb,
+ 
+ 	dev_dbg(DEV_MMI,"%s: %s event(%lu), ctrl_dsi=%d, idx=%d\n", __func__,
+ 		EVENT_PRE_DISPLAY_OFF ? "EVENT_PRE_DISPLAY_OFF" :
++		(EVENT_DISPLAY_LP ? "EVENT_DISPLAY_LP" :
+ 		(EVENT_DISPLAY_OFF ?     "EVENT_DISPLAY_OFF" :
+ 		(EVENT_PRE_DISPLAY_ON ?   "EVENT_PRE_DISPLAY_ON" :
+-		(EVENT_DISPLAY_ON ?       "EVENT_DISPLAY_ON" : "Unknown"))),
++		(EVENT_DISPLAY_ON ?       "EVENT_DISPLAY_ON" : "Unknown")))),
+ 		event, touch_cdev->pdata.ctrl_dsi, idx);
+ 
+ 	if (touch_cdev->pdata.ctrl_dsi != idx)
+ 		return 0;
+ 
+ 	panel_event = EVENT_PRE_DISPLAY_OFF ? TS_MMI_EVENT_PRE_DISPLAY_OFF :
++		(EVENT_DISPLAY_LP ? TS_MMI_EVENT_PRE_DISPLAY_OFF :
+ 		(EVENT_DISPLAY_OFF ? TS_MMI_EVENT_DISPLAY_OFF :
+ 		(EVENT_PRE_DISPLAY_ON ? TS_MMI_EVENT_PRE_DISPLAY_ON :
+-		(EVENT_DISPLAY_ON ? TS_MMI_EVENT_DISPLAY_ON : TS_MMI_EVENT_UNKNOWN)));
++		(EVENT_DISPLAY_ON ? TS_MMI_EVENT_DISPLAY_ON : TS_MMI_EVENT_UNKNOWN))));
+ 
+ 	ret = ts_mmi_panel_event_handle(touch_cdev, panel_event);
+ 
+diff --git a/include/linux/touchscreen_mmi.h b/include/linux/touchscreen_mmi.h
+index 365513615..7443639e0 100644
+--- a/include/linux/touchscreen_mmi.h
++++ b/include/linux/touchscreen_mmi.h
+@@ -137,6 +137,9 @@ struct drm_panel_notifier *evdata = evd; \
+ 	((event == DRM_PANEL_EVENT_BLANK) && \
+ 	 (*blank == DRM_PANEL_BLANK_UNBLANK))
+ 
++#define EVENT_DISPLAY_LP \
++	(*blank == DRM_PANEL_BLANK_LP)
++
+ #else /* CONFIG_DRM_PANEL_NOTIFICATIONS */
+ #if LINUX_VERSION_CODE <= KERNEL_VERSION(4,14,0)
+ #if defined(CONFIG_DRM_MSM)
+-- 
+2.43.0
+

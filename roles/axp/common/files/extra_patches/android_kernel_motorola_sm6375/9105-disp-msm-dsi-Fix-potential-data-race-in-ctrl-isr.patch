@@ -1,0 +1,67 @@
+From 997a9a4693db7177a8153acdc3ade3e93fb52095 Mon Sep 17 00:00:00 2001
+From: Gopi Botlagunta <botlagun@qti.qualcomm.com>
+Date: Wed, 7 Jan 2026 15:37:06 +0530
+Subject: [PATCH] disp: msm: dsi: Fix potential data race in ctrl isr
+
+Use atomic operations for shared variables to ensure
+safe concurrent access from both ISR and task context.
+
+Change-Id: I02d4bde88692d0be7027b158648a3ab8a5704b2d
+Signed-off-by: Gopi Botlagunta <botlagun@qti.qualcomm.com>
+---
+ techpack/display/msm/dsi/dsi_ctrl.c | 10 ++--------
+ techpack/display/msm/dsi/dsi_ctrl.h |  3 ---
+ 2 files changed, 2 insertions(+), 11 deletions(-)
+
+diff --git a/techpack/display/msm/dsi/dsi_ctrl.c b/techpack/display/msm/dsi/dsi_ctrl.c
+index 122fb10c1..988b3e60a 100644
+--- a/techpack/display/msm/dsi/dsi_ctrl.c
++++ b/techpack/display/msm/dsi/dsi_ctrl.c
+@@ -2889,12 +2889,8 @@ static irqreturn_t dsi_ctrl_isr(int irq, void *ptr)
+ 
+ 	if (status & DSI_CMD_MODE_DMA_DONE) {
+ 		if (dsi_ctrl->enable_cmd_dma_stats) {
+-			if (dsi_ctrl->hw.ops.log_line_count[dsi_ctrl->disp_op])
+-				reg =
+-				  dsi_ctrl->hw.ops.log_line_count[dsi_ctrl->disp_op](&dsi_ctrl->hw,
+-							dsi_ctrl->cmd_mode);
+-			else
+-				reg = 0;
++			u32 reg = dsi_ctrl->hw.ops.log_line_count(&dsi_ctrl->hw,
++						dsi_ctrl->cmd_mode);
+ 			atomic_set(&dsi_ctrl->cmd_success_line, (reg & 0xFFFF));
+ 			atomic_set(&dsi_ctrl->cmd_success_frame, ((reg >> 16) & 0xFFFF));
+ 			SDE_EVT32(dsi_ctrl->cell_index,	SDE_EVTLOG_FUNC_CASE1,
+@@ -2902,7 +2898,6 @@ static irqreturn_t dsi_ctrl_isr(int irq, void *ptr)
+ 					dsi_ctrl->cmd_success_frame);
+ 		}
+ 
+-		atomic64_set(&dsi_ctrl->cmd_success_ts, ktime_get());
+ 		atomic_set(&dsi_ctrl->dma_irq_trig, 1);
+ 		dsi_ctrl_disable_status_interrupt(dsi_ctrl,
+ 					DSI_SINT_CMD_MODE_DMA_DONE);
+@@ -3487,7 +3482,6 @@ int dsi_ctrl_cmd_transfer(struct dsi_ctrl *dsi_ctrl,
+ 					rc);
+ 	}
+ 
+-	cmd->ts = atomic64_read(&dsi_ctrl->cmd_success_ts);
+ 	dsi_ctrl_update_state(dsi_ctrl, DSI_CTRL_OP_CMD_TX, 0x0);
+ 
+ error:
+diff --git a/techpack/display/msm/dsi/dsi_ctrl.h b/techpack/display/msm/dsi/dsi_ctrl.h
+index f66be7fb6..944debaa2 100644
+--- a/techpack/display/msm/dsi/dsi_ctrl.h
++++ b/techpack/display/msm/dsi/dsi_ctrl.h
+@@ -312,9 +312,6 @@ struct dsi_ctrl {
+ 	u32 cmd_trigger_frame;
+ 	atomic_t cmd_success_line;
+ 	atomic_t cmd_success_frame;
+-	u32 cmd_engine_refcount;
+-	u32 pending_cmd_flags;
+-	atomic64_t cmd_success_ts;
+ };
+ 
+ /**
+-- 
+2.43.0
+

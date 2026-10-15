@@ -1,0 +1,81 @@
+From 19362f50aa0f314e87c4123f981c842527424adb Mon Sep 17 00:00:00 2001
+From: LuK1337 <priv.luk@gmail.com>
+Date: Fri, 28 Aug 2026 11:11:07 +0200
+Subject: [PATCH] input: fingerprint: etxxx: Fix CFI failure on module init
+
+Ported from LineageOS kernel aba9e36d0f9f (lineage-24.0).
+---
+ drivers/input/misc/ets_bix_mmi/etxxx_fp.c | 4 ++--
+ drivers/input/misc/rbs_fod_mmi/etxxx_fp.c | 4 ++--
+ drivers/input/misc/rbs_fps_mmi/etxxx_fp.c | 4 ++--
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/input/misc/ets_bix_mmi/etxxx_fp.c b/drivers/input/misc/ets_bix_mmi/etxxx_fp.c
+index 1384c113b..e5caee6a4 100755
+--- a/drivers/input/misc/ets_bix_mmi/etxxx_fp.c
++++ b/drivers/input/misc/ets_bix_mmi/etxxx_fp.c
+@@ -1543,7 +1543,7 @@ int egisfp_probe(struct platform_device *pdev)
+ 	return status;
+ }
+ 
+-int __init egisfp_init(void)
++static int __init egisfp_init(void)
+ {
+ 	int status;
+ 	INFO_PRINT(" %s : module init \n", __func__);
+@@ -1556,7 +1556,7 @@ int __init egisfp_init(void)
+ 	INFO_PRINT(" %s : module init OK ! \n", __func__);
+ 	return status;
+ }
+-void __exit egisfp_exit(void)
++static void __exit egisfp_exit(void)
+ {
+ 	INFO_PRINT("module exit \n");
+ 	platform_driver_unregister(&egisfp_driver);
+diff --git a/drivers/input/misc/rbs_fod_mmi/etxxx_fp.c b/drivers/input/misc/rbs_fod_mmi/etxxx_fp.c
+index b4e4068ac..fdee9e03e 100644
+--- a/drivers/input/misc/rbs_fod_mmi/etxxx_fp.c
++++ b/drivers/input/misc/rbs_fod_mmi/etxxx_fp.c
+@@ -1473,7 +1473,7 @@ int egisfp_probe(struct platform_device *pdev)
+ 	return status;
+ }
+ 
+-int __init egisfp_init(void)
++static int __init egisfp_init(void)
+ {
+ 	int status;
+ 	INFO_PRINT(" %s : module init \n", __func__);
+@@ -1486,7 +1486,7 @@ int __init egisfp_init(void)
+ 	INFO_PRINT(" %s : module init OK ! \n", __func__);
+ 	return status;
+ }
+-void __exit egisfp_exit(void)
++static void __exit egisfp_exit(void)
+ {
+ 	INFO_PRINT("module exit \n");
+ 	platform_driver_unregister(&egisfp_driver);
+diff --git a/drivers/input/misc/rbs_fps_mmi/etxxx_fp.c b/drivers/input/misc/rbs_fps_mmi/etxxx_fp.c
+index f75ffeedd..9ca505d75 100644
+--- a/drivers/input/misc/rbs_fps_mmi/etxxx_fp.c
++++ b/drivers/input/misc/rbs_fps_mmi/etxxx_fp.c
+@@ -1389,7 +1389,7 @@ int egisfp_probe(struct platform_device *pdev)
+ 	return status;
+ }
+ 
+-int __init egisfp_init(void)
++static int __init egisfp_init(void)
+ {
+ 	int status;
+ 	INFO_PRINT(" %s : module init \n", __func__);
+@@ -1402,7 +1402,7 @@ int __init egisfp_init(void)
+ 	INFO_PRINT(" %s : module init OK ! \n", __func__);
+ 	return status;
+ }
+-void __exit egisfp_exit(void)
++static void __exit egisfp_exit(void)
+ {
+ 	INFO_PRINT("module exit \n");
+ 	platform_driver_unregister(&egisfp_driver);
+-- 
+2.43.0
+

@@ -1,0 +1,86 @@
+From 200c0183bcde36d457c69a3f4f57653fae795836 Mon Sep 17 00:00:00 2001
+From: soupslurpr <92235850+soupslurpr@users.noreply.github.com>
+Date: Sun, 27 Jul 2025 02:55:06 -0700
+Subject: [PATCH] require android.permission.INTERNET to use geocoder
+
+Apps can use it to exfiltrate data to a server. Ported from euclidOS 59c780fe (GrapheneOS-derived) without the A16 GeocoderSettings toggle.
+
+Change-Id: I9518556bfcbf89e137c38deb4138aae20ed5db85
+---
+ location/java/android/location/Geocoder.java  |  5 +++-
+ .../location/LocationManagerService.java      | 28 +++++++++++++++++--
+ 2 files changed, 29 insertions(+), 4 deletions(-)
+
+diff --git a/location/java/android/location/Geocoder.java b/location/java/android/location/Geocoder.java
+index cdde7c66e..87c455fd8 100644
+--- a/location/java/android/location/Geocoder.java
++++ b/location/java/android/location/Geocoder.java
+@@ -45,8 +45,11 @@ import java.util.concurrent.TimeoutException;
+  * example one might contain the full street address of the closest building, while another might
+  * contain only a city name and postal code.
+  *
+- * <p>Use the isPresent() method to determine whether a Geocoder implementation exists on the
++ * <p>The android.permission.INTERNET permission is required to geocode or else an error will be
++ * returned. Use the isPresent() method to determine whether a Geocoder implementation exists on the
+  * current device. If no implementation is present, any attempt to geocode will result in an error.
++ * For compatibility, the isPresent() method also returns false if you don't have the
++ * android.permission.INTERNET permission.
+  *
+  * <p>Geocoder implementations are only required to make a best effort to return results in the
+  * chosen locale. Note that geocoder implementations may return results in other locales if they
+diff --git a/services/core/java/com/android/server/location/LocationManagerService.java b/services/core/java/com/android/server/location/LocationManagerService.java
+index 6053557f5..eb73c1a2a 100644
+--- a/services/core/java/com/android/server/location/LocationManagerService.java
++++ b/services/core/java/com/android/server/location/LocationManagerService.java
+@@ -1462,7 +1462,9 @@ public class LocationManagerService extends ILocationManager.Stub implements
+ 
+     @Override
+     public boolean isGeocodeAvailable() {
+-        return mGeocodeProvider != null;
++        return mGeocodeProvider != null
++                && mContext.checkCallingPermission(android.Manifest.permission.INTERNET)
++                == PERMISSION_GRANTED;
+     }
+ 
+     @Override
+@@ -1473,7 +1475,17 @@ public class LocationManagerService extends ILocationManager.Stub implements
+         Preconditions.checkArgument(identity.getUid() == request.getCallingUid());
+ 
+         if (mGeocodeProvider != null) {
+-            mGeocodeProvider.reverseGeocode(request, callback);
++            boolean hasInternetPerm = mContext.checkCallingPermission(
++                    android.Manifest.permission.INTERNET) == PERMISSION_GRANTED;
++            if (hasInternetPerm) {
++                mGeocodeProvider.reverseGeocode(request, callback);
++            } else {
++                try {
++                    callback.onError("geocoding requires android.permission.INTERNET");
++                } catch (RemoteException e) {
++                    // ignore
++                }
++            }
+         } else {
+             try {
+                 callback.onError(null);
+@@ -1491,7 +1503,17 @@ public class LocationManagerService extends ILocationManager.Stub implements
+         Preconditions.checkArgument(identity.getUid() == request.getCallingUid());
+ 
+         if (mGeocodeProvider != null) {
+-            mGeocodeProvider.forwardGeocode(request, callback);
++            boolean hasInternetPerm = mContext.checkCallingPermission(
++                    android.Manifest.permission.INTERNET) == PERMISSION_GRANTED;
++            if (hasInternetPerm) {
++                mGeocodeProvider.forwardGeocode(request, callback);
++            } else {
++                try {
++                    callback.onError("geocoding requires android.permission.INTERNET");
++                } catch (RemoteException e) {
++                    // ignore
++                }
++            }
+         } else {
+             try {
+                 callback.onError(null);
+-- 
+2.43.0
+

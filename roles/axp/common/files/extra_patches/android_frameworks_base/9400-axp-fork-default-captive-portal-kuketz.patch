@@ -1,0 +1,33 @@
+From 07b41fe53a450bbc1dfadbb54b01c8fd044f201b Mon Sep 17 00:00:00 2001
+From: Rastrisr <rastrisr@tutamail.com>
+Date: Thu, 15 Oct 2026 05:37:16 +0000
+Subject: [PATCH] SettingsProvider: default captive portal URLs to
+ captiveportal.kuketz.de
+
+AXP fork: default captive portal / connectivity check to captiveportal.kuketz.de (public, privacy-respecting; selectable in AXP Settings toggle) instead of Google.
+
+Change-Id: I4d375a9fb00540b089c5252f0ffda266c83d2ebc
+---
+ .../src/com/android/providers/settings/DatabaseHelper.java  | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java b/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java
+index 60a1fff73..0bd286b14 100644
+--- a/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java
++++ b/packages/SettingsProvider/src/com/android/providers/settings/DatabaseHelper.java
+@@ -2291,6 +2291,12 @@ class DatabaseHelper extends SQLiteOpenHelper {
+             loadStringSetting(stmt, Settings.Global.AIRPLANE_MODE_RADIOS,
+                     R.string.def_airplane_mode_radios);
+ 
++            // AXP fork: privacy-respecting connectivity check by default
++            loadSetting(stmt, Settings.Global.CAPTIVE_PORTAL_HTTP_URL, "http://captiveportal.kuketz.de");
++            loadSetting(stmt, Settings.Global.CAPTIVE_PORTAL_HTTPS_URL, "https://captiveportal.kuketz.de");
++            loadSetting(stmt, Settings.Global.CAPTIVE_PORTAL_FALLBACK_URL, "http://captiveportal.kuketz.de");
++            loadSetting(stmt, Settings.Global.CAPTIVE_PORTAL_OTHER_FALLBACK_URLS, "http://captiveportal.kuketz.de");
++
+             loadStringSetting(stmt, Global.SATELLITE_MODE_RADIOS,
+                     R.string.def_satellite_mode_radios);
+ 
+-- 
+2.43.0
+

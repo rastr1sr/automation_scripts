@@ -1,0 +1,28 @@
+From 4b229bc44a0ffd42551c72497fc004ce1f3bae78 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Sim=C3=A3o=20Gomes=20Viana?= <devel@superboring.dev>
+Date: Wed, 7 Apr 2021 20:32:10 +0200
+Subject: [PATCH] Watchdog: run emergency sync before killing system
+
+Make sure outstanding data has been synced before killing off.
+
+Change-Id: Idd7408a5562e61fe629a8a6488fdb403542fa274
+---
+ services/core/java/com/android/server/Watchdog.java | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/services/core/java/com/android/server/Watchdog.java b/services/core/java/com/android/server/Watchdog.java
+index 8e520dc63..e8e67c19e 100644
+--- a/services/core/java/com/android/server/Watchdog.java
++++ b/services/core/java/com/android/server/Watchdog.java
+@@ -951,6 +951,8 @@ public class Watchdog implements Dumpable {
+                 Slog.w(TAG, "Restart not allowed: Watchdog is *not* killing the system process");
+             } else {
+                 Slog.w(TAG, "*** WATCHDOG KILLING SYSTEM PROCESS: " + subject);
++                // Emergency sync
++                doSysRq('s');
+                 WatchdogDiagnostics.diagnoseCheckers(blockedCheckers);
+                 Slog.w(TAG, "*** GOODBYE!");
+                 if (!Build.IS_USER && isCrashLoopFound()
+-- 
+2.43.0
+

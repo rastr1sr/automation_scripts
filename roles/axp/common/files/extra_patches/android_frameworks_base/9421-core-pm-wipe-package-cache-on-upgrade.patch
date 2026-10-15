@@ -1,0 +1,97 @@
+From 4423664c3e0864b83676dc3aeaf9acbfa8f53ff2 Mon Sep 17 00:00:00 2001
+From: Albert I <kras@raphielgang.org>
+Date: Tue, 23 Aug 2022 06:16:52 +0000
+Subject: [PATCH] core: pm: Wipe package cache on upgrade
+
+Squash commits:
+
+Author: Albert I <kras@raphielgang.org>
+Date:   Thu May 12 05:37:43 2022 +0800
+
+    core: pm: Wipe package cache when upgrading system
+
+    As we keep adding and removing features with each build, it's necessary to have
+    package cache wiped out to avoid certain potential issues from arising due to a
+    dirty flash.
+
+    This commit is meant to supplement existing check for builds with incremental
+    version that starts with "eng" (not eng build type, which skips generating
+    package cache by design) which will continue to behave as expected.
+
+    Signed-off-by: Albert I <kras@raphielgang.org>
+
+Author: Albert I <kras@raphielgang.org>
+Date:   Fri Apr 8 18:59:52 2022 +0800
+
+    core: Wipe package cache on upgrade even on user build
+
+    As we're spoofing builds by pretending it to be user, let's just do this
+    for everyone.
+
+    Signed-off-by: Albert I <kras@raphielgang.org>
+    Change-Id: I5d967c25bd9c4890549d5d20f5e66b0c6845528c
+
+Author: Pranav Vashi <neobuddy89@gmail.com>
+Date:   Thu Nov 14 01:40:35 2019 +0530
+
+    Restore cache clean up code in PackageManagerService
+
+    [AnierinBliss]: Forward port to Android 13
+
+    Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+    Signed-off-by: AnierinB <anierin@evolution-x.org>
+
+Co-authored-by: Pranav Vashi <neobuddy89@gmail.com>
+Change-Id: Ieebe379853b69eb9268814169f58cf7794d8a0a5
+---
+ .../java/com/android/server/pm/PackageManagerService.java   | 2 +-
+ .../com/android/server/pm/PackageManagerServiceUtils.java   | 6 +++---
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
+index 8278fb700..300c60d82 100644
+--- a/services/core/java/com/android/server/pm/PackageManagerService.java
++++ b/services/core/java/com/android/server/pm/PackageManagerService.java
+@@ -2282,7 +2282,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService
+             }
+ 
+             mCacheDir = PackageManagerServiceUtils.preparePackageParserCache(
+-                    mIsEngBuild, mIsUserDebugBuild, mIncrementalVersion);
++                    mIsEngBuild, mIsUserDebugBuild, mIncrementalVersion, mIsUpgrade);
+ 
+             mInitialNonStoppedSystemPackages = mInjector.getSystemConfig()
+                     .getInitialNonStoppedSystemPackages();
+diff --git a/services/core/java/com/android/server/pm/PackageManagerServiceUtils.java b/services/core/java/com/android/server/pm/PackageManagerServiceUtils.java
+index 4bd83e739..64b589096 100644
+--- a/services/core/java/com/android/server/pm/PackageManagerServiceUtils.java
++++ b/services/core/java/com/android/server/pm/PackageManagerServiceUtils.java
+@@ -1343,7 +1343,7 @@ public class PackageManagerServiceUtils {
+     }
+ 
+     public static @Nullable File preparePackageParserCache(boolean forEngBuild,
+-            boolean isUserDebugBuild, String incrementalVersion) {
++            boolean isUserDebugBuild, String incrementalVersion, boolean isUpgrade) {
+         if (!FORCE_PACKAGE_PARSED_CACHE_ENABLED) {
+             if (!DEFAULT_PACKAGE_PARSER_CACHE_ENABLED) {
+                 return null;
+@@ -1374,7 +1374,7 @@ public class PackageManagerServiceUtils {
+ 
+         // Reconcile cache directories, keeping only what we'd actually use.
+         for (File cacheDir : FileUtils.listFilesOrEmpty(cacheBaseDir)) {
+-            if (Objects.equals(cacheName, cacheDir.getName())) {
++            if (!isUpgrade && Objects.equals(cacheName, cacheDir.getName())) {
+                 Slog.d(TAG, "Keeping known cache " + cacheDir.getName());
+             } else {
+                 Slog.d(TAG, "Destroying unknown cache " + cacheDir.getName());
+@@ -1399,7 +1399,7 @@ public class PackageManagerServiceUtils {
+         // NOTE: When no BUILD_NUMBER is set by the build system, it defaults to a build
+         // that starts with "eng." to signify that this is an engineering build and not
+         // destined for release.
+-        if (isUserDebugBuild && incrementalVersion.startsWith("eng.")) {
++        if (isUpgrade || incrementalVersion.startsWith("eng.")) {
+             // Heuristic: If the /system directory has been modified recently due to an "adb sync"
+             // or a regular make, then blow away the cache. Note that mtimes are *NOT* reliable
+             // in general and should not be used for production changes. In this specific case,
+-- 
+2.43.0
+

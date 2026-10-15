@@ -1,0 +1,28 @@
+From d306dedeb2a80bd5f6c8af1fe2eec40187bc3792 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Fri, 28 Mar 2025 13:07:09 +0200
+Subject: [PATCH] fix NPE system_server crash in F2fsUtils.getFilesRecursive()
+
+---
+ core/java/com/android/internal/content/F2fsUtils.java | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/core/java/com/android/internal/content/F2fsUtils.java b/core/java/com/android/internal/content/F2fsUtils.java
+index 27f1b308e..afa8d7773 100644
+--- a/core/java/com/android/internal/content/F2fsUtils.java
++++ b/core/java/com/android/internal/content/F2fsUtils.java
+@@ -266,7 +266,10 @@ public final class F2fsUtils {
+         final ArrayList<File> files = new ArrayList<>();
+         for (File f : allFiles) {
+             if (f.isDirectory()) {
+-                files.addAll(getFilesRecursive(f));
++                List<File> inner = getFilesRecursive(f);
++                if (inner != null) {
++                    files.addAll(inner);
++                }
+             } else if (f.isFile()) {
+                 files.add(f);
+             }
+-- 
+2.43.0
+

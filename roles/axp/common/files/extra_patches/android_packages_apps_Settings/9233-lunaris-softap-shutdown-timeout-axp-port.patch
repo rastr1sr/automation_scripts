@@ -1,0 +1,222 @@
+From db5597c98110354db57c3166214b27605811d5eb Mon Sep 17 00:00:00 2001
+From: cjybyjk <cjybyjk@zjnu.edu.cn>
+Date: Thu, 15 Oct 2026 10:11:27 +0000
+Subject: [PATCH] Settings: SoftAp: add support for setting shutdown timeout
+
+Ported from Lunaris-AOSP 31c633198d5c (crDroid).
+AXP fork: own timeout arrays; treat enabled+0 (framework default) as 10 min so
+saving other hotspot settings no longer disables auto-off; guard unknown values.
+
+Change-Id: Id58d2a189d02a1671b17fa18cbab1f1cae3411ce
+---
+ res/values/calyx_arrays.xml                   | 16 ++++
+ res/values/calyx_strings.xml                  |  6 ++
+ res/xml/wifi_tether_settings.xml              |  6 +-
+ ...WifiTetherAutoOffPreferenceController.java | 75 +++++++++++++++----
+ .../wifi/tether/WifiTetherSettings.java       |  4 +-
+ 5 files changed, 89 insertions(+), 18 deletions(-)
+
+diff --git a/res/values/calyx_arrays.xml b/res/values/calyx_arrays.xml
+index 19910de..2befb9a 100644
+--- a/res/values/calyx_arrays.xml
++++ b/res/values/calyx_arrays.xml
+@@ -32,4 +32,20 @@
+         <item>900000</item>
+         <item>3600000</item>
+     </string-array>
++
++    <!-- AXP fork: hotspot auto-off timeout (from crDroid/Lunaris) -->
++    <string-array name="custom_timeout_entries">
++        <item>@string/hotspot_timeout_never</item>
++        <item>@string/hotspot_timeout_5min</item>
++        <item>@string/hotspot_timeout_10min</item>
++        <item>@string/hotspot_timeout_30min</item>
++        <item>@string/hotspot_timeout_1hour</item>
++    </string-array>
++    <string-array name="custom_timeout_values" translatable="false">
++        <item>0</item>
++        <item>300000</item>
++        <item>600000</item>
++        <item>1800000</item>
++        <item>3600000</item>
++    </string-array>
+ </resources>
+diff --git a/res/values/calyx_strings.xml b/res/values/calyx_strings.xml
+index 198f747..69adad9 100644
+--- a/res/values/calyx_strings.xml
++++ b/res/values/calyx_strings.xml
+@@ -24,4 +24,10 @@
+     <string name="clipboard_overlay_summary">Show a preview of copied content at the bottom of the screen</string>
+     <!-- AXP fork: hide hardware identifiers until tapped -->
+     <string name="device_info_tap_to_show">Tap to show</string>
++    <!-- AXP fork: hotspot auto-off timeout -->
++    <string name="hotspot_timeout_never">Never</string>
++    <string name="hotspot_timeout_5min">After 5 minutes without devices</string>
++    <string name="hotspot_timeout_10min">After 10 minutes without devices</string>
++    <string name="hotspot_timeout_30min">After 30 minutes without devices</string>
++    <string name="hotspot_timeout_1hour">After 1 hour without devices</string>
+ </resources>
+diff --git a/res/xml/wifi_tether_settings.xml b/res/xml/wifi_tether_settings.xml
+index 4924bf9..8138460 100644
+--- a/res/xml/wifi_tether_settings.xml
++++ b/res/xml/wifi_tether_settings.xml
+@@ -44,10 +44,12 @@
+         android:persistent="false"
+         android:title="@string/wifi_hotspot_password_title"/>
+ 
+-    <SwitchPreferenceCompat
++    <ListPreference
+         android:key="wifi_tether_auto_turn_off"
+         android:title="@string/wifi_hotspot_auto_off_title"
+-        android:summary="@string/wifi_hotspot_auto_off_summary"/>
++        android:summary="%s"
++        android:entries="@array/custom_timeout_entries"
++        android:entryValues="@array/custom_timeout_values" />
+ 
+     <SwitchPreferenceCompat
+         android:key="wifi_tether_maximize_compatibility"
+diff --git a/src/com/android/settings/wifi/tether/WifiTetherAutoOffPreferenceController.java b/src/com/android/settings/wifi/tether/WifiTetherAutoOffPreferenceController.java
+index 58ad37b..ee52143 100644
+--- a/src/com/android/settings/wifi/tether/WifiTetherAutoOffPreferenceController.java
++++ b/src/com/android/settings/wifi/tether/WifiTetherAutoOffPreferenceController.java
+@@ -1,5 +1,7 @@
+ /*
+- * Copyright (C) 2017 The Android Open Source Project
++ * Copyright (C) 2022 Project Kaleidoscope
++ * Copyright (C) 2022 FlamingoOS Project
++ * Copyright (C) 2024 crDroid Android Project
+  *
+  * Licensed under the Apache License, Version 2.0 (the "License");
+  * you may not use this file except in compliance with the License.
+@@ -21,9 +23,11 @@ import android.net.wifi.SoftApConfiguration;
+ import android.net.wifi.WifiManager;
+ 
+ import androidx.annotation.VisibleForTesting;
++import androidx.preference.ListPreference;
+ import androidx.preference.Preference;
+-import androidx.preference.TwoStatePreference;
++import androidx.preference.PreferenceScreen;
+ 
++import com.android.settings.R;
+ import com.android.settings.core.BasePreferenceController;
+ import com.android.settings.overlay.FeatureFactory;
+ import com.android.settings.wifi.repository.WifiHotspotRepository;
+@@ -32,10 +36,14 @@ public class WifiTetherAutoOffPreferenceController extends BasePreferenceControl
+         Preference.OnPreferenceChangeListener {
+ 
+     private final WifiManager mWifiManager;
+-    private boolean mSettingsOn;
+     @VisibleForTesting
+     boolean mNeedShutdownSecondarySap;
+ 
++    private ListPreference mPreference;
++
++    // AXP fork: framework default (config_wifiFrameworkSoftApShutDownTimeoutMilliseconds)
++    private static final long DEFAULT_TIMEOUT_MS = 600000L;
++
+     public WifiTetherAutoOffPreferenceController(Context context, String preferenceKey) {
+         super(context, preferenceKey);
+         WifiHotspotRepository wifiHotspotRepository = FeatureFactory.getFeatureFactory()
+@@ -52,27 +60,66 @@ public class WifiTetherAutoOffPreferenceController extends BasePreferenceControl
+     }
+ 
+     @Override
+-    public void updateState(Preference preference) {
+-        SoftApConfiguration softApConfiguration = mWifiManager.getSoftApConfiguration();
+-        mSettingsOn = softApConfiguration.isAutoShutdownEnabled();
++    public void displayPreference(PreferenceScreen screen) {
++        super.displayPreference(screen);
++        mPreference = screen.findPreference(getPreferenceKey());
++        updateDisplay();
++    }
+ 
+-        ((TwoStatePreference) preference).setChecked(mSettingsOn);
++    private long getAutoOffTimeout() {
++        final SoftApConfiguration softApConfiguration = mWifiManager.getSoftApConfiguration();
++        final boolean settingsOn = softApConfiguration.isAutoShutdownEnabled();
++        if (!settingsOn) return 0;
++        final long timeout = softApConfiguration.getShutdownTimeoutMillis();
++        return timeout > 0 ? timeout : DEFAULT_TIMEOUT_MS;
+     }
+ 
+     @Override
+     public boolean onPreferenceChange(Preference preference, Object newValue) {
+-        boolean settingsOn = (Boolean) newValue;
+-        SoftApConfiguration.Builder configBuilder =
++        final long timeout;
++        try {
++            timeout = Long.parseLong((String) newValue);
++        } catch (NumberFormatException e) {
++            return false;
++        }
++        final SoftApConfiguration.Builder configBuilder =
+                 new SoftApConfiguration.Builder(mWifiManager.getSoftApConfiguration());
+-        configBuilder.setAutoShutdownEnabled(settingsOn);
++        setShutdownTimeout(configBuilder, timeout);
+         if (mNeedShutdownSecondarySap) {
+-            configBuilder.setBridgedModeOpportunisticShutdownEnabled(settingsOn);
++            configBuilder.setBridgedModeOpportunisticShutdownEnabled(timeout > 0);
+         }
+-        mSettingsOn = settingsOn;
+         return mWifiManager.setSoftApConfiguration(configBuilder.build());
+     }
+ 
+-    public boolean isEnabled() {
+-        return mSettingsOn;
++    public void updateConfig(SoftApConfiguration.Builder builder) {
++        if (builder == null) return;
++        final long timeout = getAutoOffTimeout();
++        setShutdownTimeout(builder, timeout);
++    }
++
++    private void setShutdownTimeout(SoftApConfiguration.Builder builder, long timeout) {
++        builder.setAutoShutdownEnabled(timeout > 0);
++        if (timeout > 0) {
++            builder.setShutdownTimeoutMillis(timeout);
++        }
++        updateDisplay(timeout);
++    }
++
++    public void updateDisplay() {
++        updateDisplay(getAutoOffTimeout());
++    }
++
++    private void updateDisplay(long timeout) {
++        if (mPreference != null) {
++            mPreference.setValue(String.valueOf(timeout));
++            if (timeout > 0) {
++                int index = mPreference.findIndexOfValue(String.valueOf(timeout));
++                mPreference.setSummary(index >= 0 ? mPreference.getEntries()[index]
++                        : mContext.getString(R.string.wifi_hotspot_auto_off_title));
++            } else {
++                mPreference.setSummary(mContext.getResources().getString(
++                    R.string.wifi_hotspot_auto_off_summary));
++            }
++        }
+     }
+ }
+diff --git a/src/com/android/settings/wifi/tether/WifiTetherSettings.java b/src/com/android/settings/wifi/tether/WifiTetherSettings.java
+index 980dee5..203870c 100644
+--- a/src/com/android/settings/wifi/tether/WifiTetherSettings.java
++++ b/src/com/android/settings/wifi/tether/WifiTetherSettings.java
+@@ -328,8 +328,7 @@ public class WifiTetherSettings extends RestrictedDashboardFragment
+         if (!mWifiTetherViewModel.isSpeedFeatureAvailable()) {
+             mMaxCompatibilityPrefController.setupMaximizeCompatibility(configBuilder);
+         }
+-        configBuilder.setAutoShutdownEnabled(
+-                mWifiTetherAutoOffPreferenceController.isEnabled());
++        mWifiTetherAutoOffPreferenceController.updateConfig(configBuilder);
+         return configBuilder.build();
+     }
+ 
+@@ -338,6 +337,7 @@ public class WifiTetherSettings extends RestrictedDashboardFragment
+         use(WifiTetherSecurityPreferenceController.class).updateDisplay();
+         use(WifiTetherPasswordPreferenceController.class).updateDisplay();
+         use(WifiTetherMaximizeCompatibilityPreferenceController.class).updateDisplay();
++        use(WifiTetherAutoOffPreferenceController.class).updateDisplay();
+     }
+ 
+     public static final SearchIndexProvider SEARCH_INDEX_DATA_PROVIDER =
+-- 
+2.43.0
+

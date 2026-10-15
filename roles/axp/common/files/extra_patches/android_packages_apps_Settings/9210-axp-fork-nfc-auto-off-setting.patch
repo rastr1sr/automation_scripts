@@ -1,0 +1,147 @@
+From 5c845d018d2d4585289cb0c30f8248304256b00c Mon Sep 17 00:00:00 2001
+From: Rastrisr <rastrisr@tutamail.com>
+Date: Thu, 15 Oct 2026 01:35:08 +0000
+Subject: [PATCH] Settings: NFC auto turn-off timeout
+
+UI for services NfcAutoOff (NFC_OFF_TIMEOUT), modelled on AXP BluetoothTimeoutPreferenceController. Replaces GrapheneOS bf67e682b, which targets the newer ExtSettings framework.
+
+Change-Id: I373ff60794b0248855ae547f9e5b22b3b12829c1
+---
+ res/values/strings.xml                        |  4 +
+ res/xml/nfc_and_payment_settings.xml          |  8 ++
+ .../nfc/NfcTimeoutPreferenceController.java   | 89 +++++++++++++++++++
+ 3 files changed, 101 insertions(+)
+ create mode 100644 src/com/android/settings/nfc/NfcTimeoutPreferenceController.java
+
+diff --git a/res/values/strings.xml b/res/values/strings.xml
+index 7fdea0c..d2075d5 100644
+--- a/res/values/strings.xml
++++ b/res/values/strings.xml
+@@ -33,6 +33,10 @@
+     <!-- Connected devices screen, setting option summary to change bluetooth timeout -->
+     <string name="bluetooth_timeout_summary">Bluetooth will turn off after <xliff:g id="timeout_description">%1$s</xliff:g> if no devices connected</string>
+     <string name="bluetooth_timeout_summary2">Do not automatically turn off Bluetooth</string>
++    <!-- NFC screen, auto turn-off timeout (AXP fork) -->
++    <string name="nfc_timeout">Turn off NFC automatically</string>
++    <string name="nfc_timeout_summary">NFC will turn off after <xliff:g id="timeout_description">%1$s</xliff:g></string>
++    <string name="nfc_timeout_summary2">Do not automatically turn off NFC</string>
+     <string name="bluetooth_timeout_summary_never">Never</string>
+     <string name="bluetooth_timeout_summary_15secs">15 seconds</string>
+     <string name="bluetooth_timeout_summary_30secs">30 seconds</string>
+diff --git a/res/xml/nfc_and_payment_settings.xml b/res/xml/nfc_and_payment_settings.xml
+index 5fb7c69..40b95bb 100644
+--- a/res/xml/nfc_and_payment_settings.xml
++++ b/res/xml/nfc_and_payment_settings.xml
+@@ -36,6 +36,14 @@
+         settings:controller="com.android.settings.nfc.SecureNfcPreferenceController"
+         android:summary="@string/nfc_secure_toggle_summary"/>
+ 
++    <androidx.preference.ListPreference
++        android:key="nfc_timeout"
++        android:title="@string/nfc_timeout"
++        android:summary="@string/summary_placeholder"
++        android:entries="@array/bluetooth_timeout_entries"
++        android:entryValues="@array/bluetooth_timeout_values"
++        settings:controller="com.android.settings.nfc.NfcTimeoutPreferenceController"/>
++
+     <Preference
+         android:key="default_payment_app"
+         android:title="@string/nfc_payment_settings_title"
+diff --git a/src/com/android/settings/nfc/NfcTimeoutPreferenceController.java b/src/com/android/settings/nfc/NfcTimeoutPreferenceController.java
+new file mode 100644
+index 0000000..35e6b91
+--- /dev/null
++++ b/src/com/android/settings/nfc/NfcTimeoutPreferenceController.java
+@@ -0,0 +1,89 @@
++/*
++ * Copyright (C) 2020 The Calyx Institute
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++// NFC variant of AXP's BluetoothTimeoutPreferenceController (setting consumed by
++// services NfcAutoOff, ported from GrapheneOS ebce750e74 / bf67e682b)
++package com.android.settings.nfc;
++
++import android.content.Context;
++import android.nfc.NfcAdapter;
++import android.provider.Settings;
++import android.util.Log;
++
++import androidx.preference.ListPreference;
++import androidx.preference.Preference;
++
++import com.android.settings.R;
++import com.android.settings.bluetooth.BluetoothTimeoutPreferenceController;
++import com.android.settings.core.BasePreferenceController;
++import com.android.settings.core.PreferenceControllerMixin;
++
++public class NfcTimeoutPreferenceController extends BasePreferenceController implements
++        PreferenceControllerMixin, Preference.OnPreferenceChangeListener {
++    private static final String TAG = "NfcTimeoutPrefCtrl";
++
++    private final String mKey;
++    private final NfcAdapter mNfcAdapter;
++
++    public NfcTimeoutPreferenceController(Context context, String key) {
++        super(context, key);
++        mKey = key;
++        mNfcAdapter = NfcAdapter.getDefaultAdapter(context);
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        return mNfcAdapter != null ? AVAILABLE : UNSUPPORTED_ON_DEVICE;
++    }
++
++    @Override
++    public String getPreferenceKey() {
++        return mKey;
++    }
++
++    @Override
++    public void updateState(Preference preference) {
++        final ListPreference p = (ListPreference) preference;
++        final long timeout = Settings.Global.getLong(mContext.getContentResolver(),
++                Settings.Global.NFC_OFF_TIMEOUT, 0);
++        p.setValue(String.valueOf(timeout));
++        updateSummary(p, timeout);
++    }
++
++    @Override
++    public boolean onPreferenceChange(Preference preference, Object newValue) {
++        try {
++            long value = Long.parseLong((String) newValue);
++            Settings.Global.putLong(mContext.getContentResolver(),
++                    Settings.Global.NFC_OFF_TIMEOUT, value);
++            updateSummary((ListPreference) preference, value);
++        } catch (NumberFormatException e) {
++            Log.e(TAG, "could not persist NFC timeout setting", e);
++        }
++        return true;
++    }
++
++    private void updateSummary(ListPreference p, long timeout) {
++        final CharSequence d = BluetoothTimeoutPreferenceController.getTimeoutDescription(
++                timeout, p.getEntries(), p.getEntryValues());
++        String summary = "";
++        if (d != null) {
++            summary = timeout != 0 ? mContext.getString(R.string.nfc_timeout_summary, d)
++                    : mContext.getString(R.string.nfc_timeout_summary2);
++        }
++        p.setSummary(summary);
++    }
++}
+-- 
+2.43.0
+

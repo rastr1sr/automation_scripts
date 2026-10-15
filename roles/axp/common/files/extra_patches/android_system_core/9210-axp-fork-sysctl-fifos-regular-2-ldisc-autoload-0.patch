@@ -1,0 +1,30 @@
+From 4f74857e2062ac7e0198f145ea7e675b94fd4c78 Mon Sep 17 00:00:00 2001
+From: Rastrisr <rastrisr@tutamail.com>
+Date: Thu, 15 Oct 2026 01:24:22 +0000
+Subject: [PATCH] init: protected_fifos/regular=2, ldisc_autoload=0 (GrapheneOS
+ 897ec0806e, 8dc21d8c2a)
+
+Change-Id: Ic43ebc33ae9ca851e64eca7b9cdba15678208edd
+---
+ rootdir/init.rc | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/rootdir/init.rc b/rootdir/init.rc
+index eab10e9..8447fe1 100644
+--- a/rootdir/init.rc
++++ b/rootdir/init.rc
+@@ -336,8 +336,9 @@ on init
+     write /proc/sys/kernel/dmesg_restrict 1
+     write /proc/sys/fs/protected_hardlinks 1
+     write /proc/sys/fs/protected_symlinks 1
+-    write /proc/sys/fs/protected_fifos 1
+-    write /proc/sys/fs/protected_regular 1
++    write /proc/sys/fs/protected_fifos 2
++    write /proc/sys/fs/protected_regular 2
++    write /proc/sys/dev/tty/ldisc_autoload 0
+     write /proc/sys/net/ipv6/conf/all/use_tempaddr 2
+     write /proc/sys/net/ipv6/conf/all/max_addresses 128
+     write /proc/sys/net/ipv6/conf/all/temp_prefered_lft 21600
+-- 
+2.43.0
+

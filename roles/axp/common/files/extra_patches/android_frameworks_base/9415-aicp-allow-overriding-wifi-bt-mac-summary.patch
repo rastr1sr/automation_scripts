@@ -1,0 +1,58 @@
+From eebeace2cf23bd6e15e9ce91ebb7a20ee6e1cb3f Mon Sep 17 00:00:00 2001
+From: Torsten Grote <torsten@calyx.org>
+Date: Tue, 19 May 2026 09:01:56 -0300
+Subject: [PATCH] Allow overriding Wi-Fi and Bluetooth MAC addresses
+
+This is for the Settings app being able to inject
+"Tap to show" functionality to prevent users unintentionally
+sharing hardware identifiers in screenshots.
+
+Issue: calyxos#3502
+Change-Id: Iff2af7d028d387f40ecab4aee33dfba5d34d8ef8
+---
+ .../AbstractBluetoothAddressPreferenceController.java       | 6 +++++-
+ .../AbstractWifiMacAddressPreferenceController.java         | 6 +++++-
+ 2 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/packages/SettingsLib/src/com/android/settingslib/deviceinfo/AbstractBluetoothAddressPreferenceController.java b/packages/SettingsLib/src/com/android/settingslib/deviceinfo/AbstractBluetoothAddressPreferenceController.java
+index 0b2b35462..0aeae60d0 100644
+--- a/packages/SettingsLib/src/com/android/settingslib/deviceinfo/AbstractBluetoothAddressPreferenceController.java
++++ b/packages/SettingsLib/src/com/android/settingslib/deviceinfo/AbstractBluetoothAddressPreferenceController.java
+@@ -88,7 +88,7 @@ public abstract class AbstractBluetoothAddressPreferenceController
+                     if (!TextUtils.isEmpty(address)) {
+                         // Convert the address to lowercase for consistency with the wifi MAC
+                         // address.
+-                        mBtAddress.setSummary(address.toLowerCase());
++                        setMacSummary(mBtAddress, address.toLowerCase());
+                     } else {
+                         mBtAddress.setSummary(R.string.status_unavailable);
+                     }
+@@ -99,4 +99,8 @@ public abstract class AbstractBluetoothAddressPreferenceController
+             }, mContext.getMainExecutor());
+         }
+     }
++
++    protected void setMacSummary(Preference preference, String summary) {
++        preference.setSummary(summary);
++    }
+ }
+diff --git a/packages/SettingsLib/src/com/android/settingslib/deviceinfo/AbstractWifiMacAddressPreferenceController.java b/packages/SettingsLib/src/com/android/settingslib/deviceinfo/AbstractWifiMacAddressPreferenceController.java
+index 943e3fc27..7431e2d2a 100644
+--- a/packages/SettingsLib/src/com/android/settingslib/deviceinfo/AbstractWifiMacAddressPreferenceController.java
++++ b/packages/SettingsLib/src/com/android/settingslib/deviceinfo/AbstractWifiMacAddressPreferenceController.java
+@@ -95,7 +95,11 @@ public abstract class AbstractWifiMacAddressPreferenceController
+         if (TextUtils.isEmpty(macAddress) || macAddress.equals(WifiInfo.DEFAULT_MAC_ADDRESS)) {
+             mWifiMacAddress.setSummary(R.string.status_unavailable);
+         } else {
+-            mWifiMacAddress.setSummary(macAddress);
++            setMacSummary(mWifiMacAddress, macAddress);
+         }
+     }
++
++    protected void setMacSummary(Preference preference, String summary) {
++        preference.setSummary(summary);
++    }
+ }
+-- 
+2.43.0
+

@@ -1,0 +1,86 @@
+From 7d771d150b661dbdb1006f5ff1172dabb36bdc42 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Thu, 15 Oct 2026 08:45:46 +0000
+Subject: [PATCH] NetworkPolicy: firewall self-test at boot
+
+Per-app network blocking depends on BPF map writes; some kernels drop them
+silently and the firewall fails open. Write and read back a rule for an unused
+uid and post a persistent warning notification if it does not stick.
+Idea from RestlessOS (BPF firewall self-test).
+
+Change-Id: I5eb36c794c0697188b7c61074adfd498c2c7663b
+---
+ .../net/NetworkPolicyManagerService.java      | 43 +++++++++++++++++++
+ 1 file changed, 43 insertions(+)
+
+diff --git a/services/core/java/com/android/server/net/NetworkPolicyManagerService.java b/services/core/java/com/android/server/net/NetworkPolicyManagerService.java
+index 2d02b698c..c7a19143a 100644
+--- a/services/core/java/com/android/server/net/NetworkPolicyManagerService.java
++++ b/services/core/java/com/android/server/net/NetworkPolicyManagerService.java
+@@ -66,6 +66,7 @@ import static android.net.ConnectivityManager.FIREWALL_CHAIN_LOW_POWER_STANDBY;
+ import static android.net.ConnectivityManager.FIREWALL_CHAIN_METERED_ALLOW;
+ import static android.net.ConnectivityManager.FIREWALL_CHAIN_METERED_DENY_ADMIN;
+ import static android.net.ConnectivityManager.FIREWALL_CHAIN_METERED_DENY_USER;
++import static android.net.ConnectivityManager.FIREWALL_CHAIN_OEM_DENY_2;
+ import static android.net.ConnectivityManager.FIREWALL_CHAIN_POWERSAVE;
+ import static android.net.ConnectivityManager.FIREWALL_CHAIN_RESTRICTED;
+ import static android.net.ConnectivityManager.FIREWALL_CHAIN_STANDBY;
+@@ -1233,6 +1234,9 @@ public class NetworkPolicyManagerService extends INetworkPolicyManager.Stub {
+                 Slog.wtf(TAG, "initService: setRequireVpnForUids failed", e);
+             }
+ 
++            // AXP fork: make sure per-app network blocking actually reaches the kernel
++            mHandler.post(this::runFirewallSelfTest);
++
+             mAppStandby.addListener(new NetPolicyAppIdleStateChangeListener());
+             synchronized (mUidRulesFirstLock) {
+                 updateRulesForAppIdleParoleUL();
+@@ -6615,6 +6619,45 @@ public class NetworkPolicyManagerService extends INetworkPolicyManager.Stub {
+      * Add or remove a uid to the firewall denylist for all network ifaces.
+      */
+     @GuardedBy("mUidRulesFirstLock")
++    // AXP fork: firewall self-test. Per-app network blocking (INTERNET permission, data
++    // restrictions) relies on BPF map writes; kernel/BPF bugs can drop them silently and make
++    // the firewall fail open. Write a rule for an unused uid, read it back, and warn if it
++    // didn't stick. ponytail: English-only notification text, no Settings status page.
++    private static final int FIREWALL_SELF_TEST_UID = Process.LAST_APPLICATION_UID;
++
++    private void runFirewallSelfTest() {
++        final int chain = FIREWALL_CHAIN_OEM_DENY_2;
++        final int uid = FIREWALL_SELF_TEST_UID;
++        boolean ok;
++        try {
++            mConnManager.setUidFirewallRule(chain, uid, FIREWALL_RULE_DENY);
++            ok = mConnManager.getUidFirewallRule(chain, uid) == FIREWALL_RULE_DENY;
++            mConnManager.setUidFirewallRule(chain, uid, FIREWALL_RULE_ALLOW);
++            ok &= mConnManager.getUidFirewallRule(chain, uid) == FIREWALL_RULE_ALLOW;
++        } catch (RuntimeException e) {
++            Slog.e(TAG, "Firewall self-test threw", e);
++            ok = false;
++        }
++        if (ok) {
++            Slog.i(TAG, "Firewall self-test passed");
++            return;
++        }
++        Slog.e(TAG, "Firewall self-test FAILED: per-app network blocking is not enforced");
++        final Notification n = new Notification.Builder(mContext,
++                SystemNotificationChannels.NETWORK_ALERTS)
++                .setSmallIcon(android.R.drawable.stat_notify_error)
++                .setContentTitle("Per-app network blocking is not working")
++                .setStyle(new Notification.BigTextStyle().bigText(
++                        "The firewall self-test failed, so apps you denied network access may "
++                        + "still be able to connect. Please report this to the ROM maintainer."))
++                .setOngoing(true)
++                .setColor(mContext.getColor(
++                        com.android.internal.R.color.system_notification_accent_color))
++                .build();
++        mContext.getSystemService(NotificationManager.class).notifyAsUser(
++                "firewall_self_test", 0, n, UserHandle.ALL);
++    }
++
+     private void setUidFirewallRuleUL(int chain, int uid, int rule) {
+         if (mNeverApplyRulesToCoreUids && !isUidValidForRulesUL(uid)) {
+             return;
+-- 
+2.43.0
+

@@ -1,0 +1,260 @@
+From faf8b9c87b7ff704a51afec02224f59c6a69828e Mon Sep 17 00:00:00 2001
+From: Ido Ben-Hur <idoybh2@gmail.com>
+Date: Thu, 15 Oct 2026 06:33:28 +0000
+Subject: [PATCH] SystemUI: Add private DNS QS tile
+
+Ported from crDroid d781aa9d13f1810c40cea9ca4965a91182491985.
+AXP fork: long-press opens Network & internet (no PRIVATE_DNS_SETTINGS activity
+in our Settings), generic metrics category.
+
+Change-Id: I9e282c92f4a8974048c793db116f7bf42ae9208a
+---
+ .../SystemUI/res/drawable/ic_settings_dns.xml |  10 +
+ packages/SystemUI/res/values/config.xml       |   2 +-
+ .../android/systemui/qs/tiles/DnsTile.java    | 178 ++++++++++++++++++
+ .../connectivity/ConnectivityModule.kt        |   7 +
+ 4 files changed, 196 insertions(+), 1 deletion(-)
+ create mode 100644 packages/SystemUI/res/drawable/ic_settings_dns.xml
+ create mode 100644 packages/SystemUI/src/com/android/systemui/qs/tiles/DnsTile.java
+
+diff --git a/packages/SystemUI/res/drawable/ic_settings_dns.xml b/packages/SystemUI/res/drawable/ic_settings_dns.xml
+new file mode 100644
+index 000000000..be1e554ea
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/ic_settings_dns.xml
+@@ -0,0 +1,10 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24"
++    android:tint="?android:attr/colorControlNormal">
++  <path
++      android:fillColor="#FFFFFFFF"
++      android:pathData="M7.5,6Q6.875,6 6.438,6.438Q6,6.875 6,7.5Q6,8.125 6.438,8.562Q6.875,9 7.5,9Q8.125,9 8.562,8.562Q9,8.125 9,7.5Q9,6.875 8.562,6.438Q8.125,6 7.5,6ZM7.5,16Q6.875,16 6.438,16.438Q6,16.875 6,17.5Q6,18.125 6.438,18.562Q6.875,19 7.5,19Q8.125,19 8.562,18.562Q9,18.125 9,17.5Q9,16.875 8.562,16.438Q8.125,16 7.5,16ZM4,3H20Q20.425,3 20.712,3.287Q21,3.575 21,4V11Q21,11.425 20.712,11.712Q20.425,12 20,12H4Q3.575,12 3.288,11.712Q3,11.425 3,11V4Q3,3.575 3.288,3.287Q3.575,3 4,3ZM5,5V10H19V5ZM4,13H20Q20.425,13 20.712,13.287Q21,13.575 21,14V21Q21,21.425 20.712,21.712Q20.425,22 20,22H4Q3.575,22 3.288,21.712Q3,21.425 3,21V14Q3,13.575 3.288,13.287Q3.575,13 4,13ZM5,15V20H19V15ZM5,5V10ZM5,15V20Z"/>
++</vector>
+diff --git a/packages/SystemUI/res/values/config.xml b/packages/SystemUI/res/values/config.xml
+index 79dd6fcc9..19611133d 100644
+--- a/packages/SystemUI/res/values/config.xml
++++ b/packages/SystemUI/res/values/config.xml
+@@ -119,7 +119,7 @@
+ 
+     <!-- Tiles native to System UI. Order should match "quick_settings_tiles_default" -->
+     <string name="quick_settings_tiles_stock" translatable="false">
+-        internet,wifi,cell,bt,flashlight,dnd,alarm,airplane,nfc,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle,location,hotspot,inversion,saver,dark,work,night,reverse,reduce_brightness,qr_code_scanner,onehanded,color_correction,dream,font_scaling,record_issue,hearing_devices,notes,ambient_display,aod,caffeine,heads_up,powershare,profiles,reading_mode,sync,usb_tether,vpn
++        internet,wifi,cell,bt,flashlight,dnd,alarm,airplane,nfc,controls,wallet,rotation,battery,cast,screenrecord,mictoggle,cameratoggle,location,hotspot,inversion,saver,dark,work,night,reverse,reduce_brightness,qr_code_scanner,onehanded,color_correction,dream,font_scaling,record_issue,hearing_devices,notes,ambient_display,aod,caffeine,heads_up,powershare,profiles,reading_mode,sync,usb_tether,vpn,dns
+     </string>
+ 
+     <!-- The tiles to display in QuickSettings -->
+diff --git a/packages/SystemUI/src/com/android/systemui/qs/tiles/DnsTile.java b/packages/SystemUI/src/com/android/systemui/qs/tiles/DnsTile.java
+new file mode 100644
+index 000000000..e59780feb
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/qs/tiles/DnsTile.java
+@@ -0,0 +1,178 @@
++/*
++ * Copyright (C) 2024 Yet Another AOSP Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.systemui.qs.tiles;
++
++import static android.net.ConnectivitySettingsManager.PRIVATE_DNS_MODE_OFF;
++import static android.net.ConnectivitySettingsManager.PRIVATE_DNS_MODE_OPPORTUNISTIC;
++
++import android.content.Intent;
++import android.net.ConnectivitySettingsManager;
++import android.os.Handler;
++import android.os.Looper;
++import android.provider.Settings;
++import android.service.quicksettings.Tile;
++import android.widget.Switch;
++
++import androidx.annotation.Nullable;
++
++import com.android.internal.logging.MetricsLogger;
++import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
++import com.android.systemui.Prefs;
++import com.android.systemui.animation.Expandable;
++import com.android.systemui.res.R;
++import com.android.systemui.dagger.qualifiers.Background;
++import com.android.systemui.dagger.qualifiers.Main;
++import com.android.systemui.plugins.ActivityStarter;
++import com.android.systemui.plugins.FalsingManager;
++import com.android.systemui.plugins.qs.QSTile.BooleanState;
++import com.android.systemui.plugins.statusbar.StatusBarStateController;
++import com.android.systemui.qs.QSHost;
++import com.android.systemui.qs.QsEventLogger;
++import com.android.systemui.qs.SettingObserver;
++import com.android.systemui.qs.logging.QSLogger;
++import com.android.systemui.qs.tileimpl.QSTileImpl;
++import com.android.systemui.util.settings.GlobalSettings;
++
++import javax.inject.Inject;
++
++/** Quick settings tile: DNS Tile **/
++public class DnsTile extends QSTileImpl<BooleanState> {
++
++    public static final String TILE_SPEC = "dns";
++    private static final String KEY_PREV_MODE = "dns_tile_prev_mode";
++
++    private final SettingObserver mSetting;
++    private boolean mListening;
++
++    @Inject
++    public DnsTile(
++            QSHost host,
++            QsEventLogger uiEventLogger,
++            @Background Looper backgroundLooper,
++            @Main Handler mainHandler,
++            FalsingManager falsingManager,
++            MetricsLogger metricsLogger,
++            StatusBarStateController statusBarStateController,
++            ActivityStarter activityStarter,
++            QSLogger qsLogger,
++            GlobalSettings globalSettings) {
++        super(host, uiEventLogger, backgroundLooper, mainHandler, falsingManager, metricsLogger,
++                statusBarStateController, activityStarter, qsLogger);
++        mSetting = new SettingObserver(globalSettings, mHandler, Settings.Global.PRIVATE_DNS_MODE) {
++            @Override
++            protected void handleValueChanged(int value, boolean observedChange) {
++                handleRefreshState(value);
++            }
++        };
++    }
++
++    @Override
++    public boolean isAvailable() {
++        return true;
++    }
++
++    @Override
++    public void handleSetListening(boolean listening) {
++        super.handleSetListening(listening);
++        if (mListening == listening) return;
++        mListening = listening;
++        if (listening) {
++            refreshState();
++        }
++        mSetting.setListening(listening);
++    }
++
++    @Override
++    public Intent getLongClickIntent() {
++        return new Intent(Settings.ACTION_WIRELESS_SETTINGS);
++    }
++
++    @Override
++    public BooleanState newTileState() {
++        return new BooleanState();
++    }
++
++    @Override
++    protected void handleClick(@Nullable Expandable expandable) {
++        // don't toggle if not needed, just refresh state instead
++        final int mode = ConnectivitySettingsManager.getPrivateDnsMode(mContext);
++        final boolean stateEnabled = mState.value;
++        final boolean isEnabled = mode != PRIVATE_DNS_MODE_OFF;
++        if (stateEnabled && !isEnabled || !stateEnabled && isEnabled) {
++            refreshState();
++            return;
++        }
++
++        setPrivateDnsEnabled(!stateEnabled);
++    }
++
++    @Override
++    public CharSequence getTileLabel() {
++        return mContext.getString(
++                com.android.settingslib.R.string.select_private_dns_configuration_title);
++    }
++
++    @Override
++    protected void handleUpdateState(BooleanState state, Object arg) {
++        state.label = mContext.getString(
++                com.android.settingslib.R.string.select_private_dns_configuration_title);
++        state.icon = ResourceIcon.get(R.drawable.ic_settings_dns);
++        state.expandedAccessibilityClassName = Switch.class.getName();
++        state.contentDescription = state.label;
++
++        final int mode = ConnectivitySettingsManager.getPrivateDnsMode(mContext);
++        final boolean isTileActive = mode != PRIVATE_DNS_MODE_OFF;
++        state.value = isTileActive;
++        state.state = isTileActive ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE;
++        state.secondaryLabel = getSecondaryLabel(mode);
++        state.stateDescription = state.secondaryLabel;
++    }
++
++    @Override
++    public int getMetricsCategory() {
++        return MetricsEvent.VIEW_UNKNOWN;
++    }
++
++    private String getSecondaryLabel(int mode) {
++        if (mode == PRIVATE_DNS_MODE_OFF) {
++            return mContext.getString(
++                    com.android.settingslib.R.string.private_dns_mode_off);
++        } else if (mode == PRIVATE_DNS_MODE_OPPORTUNISTIC) {
++            return mContext.getString(
++                    com.android.settingslib.R.string.private_dns_mode_opportunistic);
++        }
++        // PRIVATE_DNS_MODE_PROVIDER_HOSTNAME
++        return ConnectivitySettingsManager.getPrivateDnsHostname(mContext);
++    }
++
++    private void setPrivateDnsEnabled(boolean enabled) {
++        if (!enabled) {
++            // save current mode for returning
++            // double check it is not off!
++            final int mode = ConnectivitySettingsManager.getPrivateDnsMode(mContext);
++            if (mode == PRIVATE_DNS_MODE_OFF) return;
++            Prefs.putInt(mContext, KEY_PREV_MODE, mode);
++            ConnectivitySettingsManager.setPrivateDnsMode(mContext, PRIVATE_DNS_MODE_OFF);
++            return;
++        }
++        // return to the last state
++        int mode = Prefs.getInt(mContext, KEY_PREV_MODE, PRIVATE_DNS_MODE_OPPORTUNISTIC);
++        // never toggle off to off - use opportunistic
++        if (mode == PRIVATE_DNS_MODE_OFF) mode = PRIVATE_DNS_MODE_OPPORTUNISTIC;
++        ConnectivitySettingsManager.setPrivateDnsMode(mContext, mode);
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/connectivity/ConnectivityModule.kt b/packages/SystemUI/src/com/android/systemui/statusbar/connectivity/ConnectivityModule.kt
+index 100902834..1d3b53ad4 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/connectivity/ConnectivityModule.kt
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/connectivity/ConnectivityModule.kt
+@@ -28,6 +28,7 @@ import com.android.systemui.qs.tiles.AirplaneModeTile
+ import com.android.systemui.qs.tiles.BluetoothTile
+ import com.android.systemui.qs.tiles.CastTile
+ import com.android.systemui.qs.tiles.DataSaverTile
++import com.android.systemui.qs.tiles.DnsTile
+ import com.android.systemui.qs.tiles.HotspotTile
+ import com.android.systemui.qs.tiles.InternetTile
+ import com.android.systemui.qs.tiles.InternetTileNewImpl
+@@ -114,6 +115,12 @@ interface ConnectivityModule {
+         impl: InternetTileDataInteractor
+     ): QSTileAvailabilityInteractor
+ 
++    /** Inject DnsTile into tileMap in QSModule */
++    @Binds
++    @IntoMap
++    @StringKey(DnsTile.TILE_SPEC)
++    fun bindDnsTile(dnsTile: DnsTile): QSTileImpl<*>
++
+     companion object {
+ 
+         const val AIRPLANE_MODE_TILE_SPEC = "airplane"
+-- 
+2.43.0
+

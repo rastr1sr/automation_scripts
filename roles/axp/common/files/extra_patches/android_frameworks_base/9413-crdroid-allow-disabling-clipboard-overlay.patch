@@ -1,0 +1,50 @@
+From b37a4ec624becb0d1e48b4faa1cd028bde390e20 Mon Sep 17 00:00:00 2001
+From: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Date: Thu, 15 Oct 2026 06:29:50 +0000
+Subject: [PATCH] SystemUI: Allow disabling clipboard overlay [1/2]
+
+Ported from crDroid 9a75d4be393d8910a831483337c717bec54b0cc7
+(AXP fork: placed in Settings.Secure next to clipboard auto-clear).
+
+Change-Id: I49e60a390ceee1f5c3897628213f785793838bd5
+---
+ core/java/android/provider/Settings.java                   | 7 +++++++
+ .../systemui/clipboardoverlay/ClipboardListener.java       | 4 ++++
+ 2 files changed, 11 insertions(+)
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 8d6369b35..8ab23bbe2 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -12923,6 +12923,13 @@ public final class Settings {
+          */
+         public static final String CLIPBOARD_AUTO_CLEAR_TIMEOUT = "clipboard_auto_clear_timeout";
+ 
++        /**
++         * Whether to show an overlay in the bottom corner of the screen on copying stuff
++         * into the clipboard.
++         * @hide
++         */
++        public static final String SHOW_CLIPBOARD_OVERLAY = "show_clipboard_overlay";
++
+         /**
+          * The amount of time in milliseconds before camera is turned off
+          * @hide
+diff --git a/packages/SystemUI/src/com/android/systemui/clipboardoverlay/ClipboardListener.java b/packages/SystemUI/src/com/android/systemui/clipboardoverlay/ClipboardListener.java
+index 7033e641d..fde73b1d5 100644
+--- a/packages/SystemUI/src/com/android/systemui/clipboardoverlay/ClipboardListener.java
++++ b/packages/SystemUI/src/com/android/systemui/clipboardoverlay/ClipboardListener.java
+@@ -91,6 +91,10 @@ public class ClipboardListener implements
+ 
+     @Override
+     public void onPrimaryClipChanged() {
++        if (Settings.Secure.getIntForUser(mContext.getContentResolver(),
++                Settings.Secure.SHOW_CLIPBOARD_OVERLAY, 1, UserHandle.USER_CURRENT) == 0) {
++            return;
++        }
+         if (!mClipboardManager.hasPrimaryClip()) {
+             return;
+         }
+-- 
+2.43.0
+

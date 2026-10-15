@@ -1,0 +1,102 @@
+From 2eb8ecb9c12446d2201d874bb499c547db93c5c3 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Thu, 15 Oct 2026 06:30:58 +0000
+Subject: [PATCH] Settings: clipboard preview toggle [2/2]
+
+Privacy > Show clipboard preview, writes Settings.Secure.SHOW_CLIPBOARD_OVERLAY.
+Based on crDroid "Allow disabling clipboard overlay".
+
+Change-Id: I68723e5de06dbda7b063ebd043bd9c07ef5bad80
+---
+ res/values/calyx_strings.xml                  |  2 +
+ res/xml/more_security_privacy_settings.xml    |  8 ++++
+ .../ClipboardOverlayPreferenceController.java | 47 +++++++++++++++++++
+ 3 files changed, 57 insertions(+)
+ create mode 100644 src/com/android/settings/privacy/ClipboardOverlayPreferenceController.java
+
+diff --git a/res/values/calyx_strings.xml b/res/values/calyx_strings.xml
+index dc51fa5..3676e6e 100644
+--- a/res/values/calyx_strings.xml
++++ b/res/values/calyx_strings.xml
+@@ -20,4 +20,6 @@
+     <string name="clipboard_auto_clear_5min">After 5 minutes</string>
+     <string name="clipboard_auto_clear_15min">After 15 minutes</string>
+     <string name="clipboard_auto_clear_1hour">After 1 hour</string>
++    <string name="clipboard_overlay_title">Show clipboard preview</string>
++    <string name="clipboard_overlay_summary">Show a preview of copied content at the bottom of the screen</string>
+ </resources>
+diff --git a/res/xml/more_security_privacy_settings.xml b/res/xml/more_security_privacy_settings.xml
+index ea1da72..09c8532 100644
+--- a/res/xml/more_security_privacy_settings.xml
++++ b/res/xml/more_security_privacy_settings.xml
+@@ -114,6 +114,14 @@
+             settings:controller=
+                 "com.android.settings.privacy.ClipboardAutoClearPreferenceController" />
+ 
++        <!-- Clipboard overlay (AXP fork, from crDroid) -->
++        <SwitchPreference
++            android:key="privacy_clipboard_overlay"
++            android:title="@string/clipboard_overlay_title"
++            android:summary="@string/clipboard_overlay_summary"
++            settings:controller=
++                "com.android.settings.privacy.ClipboardOverlayPreferenceController" />
++
+         <!-- Strict location redaction -->
+         <SwitchPreference
+             android:key="privacy_strict_location_redaction"
+diff --git a/src/com/android/settings/privacy/ClipboardOverlayPreferenceController.java b/src/com/android/settings/privacy/ClipboardOverlayPreferenceController.java
+new file mode 100644
+index 0000000..44c608a
+--- /dev/null
++++ b/src/com/android/settings/privacy/ClipboardOverlayPreferenceController.java
+@@ -0,0 +1,47 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++// AXP fork: toggle for the SystemUI clipboard overlay (Settings.Secure.SHOW_CLIPBOARD_OVERLAY,
++// read by ClipboardListener; ported from crDroid)
++package com.android.settings.privacy;
++
++import android.content.Context;
++import android.provider.Settings;
++
++import com.android.settings.core.TogglePreferenceController;
++
++public class ClipboardOverlayPreferenceController extends TogglePreferenceController {
++
++    public ClipboardOverlayPreferenceController(Context context, String key) {
++        super(context, key);
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        return AVAILABLE;
++    }
++
++    @Override
++    public boolean isChecked() {
++        return Settings.Secure.getInt(mContext.getContentResolver(),
++                Settings.Secure.SHOW_CLIPBOARD_OVERLAY, 1) != 0;
++    }
++
++    @Override
++    public boolean setChecked(boolean isChecked) {
++        Settings.Secure.putInt(mContext.getContentResolver(),
++                Settings.Secure.SHOW_CLIPBOARD_OVERLAY, isChecked ? 1 : 0);
++        return true;
++    }
++
++    @Override
++    public boolean isSliceable() {
++        return false;
++    }
++
++    @Override
++    public int getSliceHighlightMenuRes() {
++        return NO_RES;
++    }
++}
+-- 
+2.43.0
+

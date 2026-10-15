@@ -52,3 +52,6 @@ hugo_supportlevel_slim: "community"
 hugo_first_releasedate_slim: "TBD"
 hugo_state_slim: "!! ALPHA !!"
 axp_bootloader_id_slim: ''
+
+# tier2: manifest branch with the lineage-24.0 kernel
+git_repo_local_manifests_branch: "axp-a15-tier2"

@@ -1,0 +1,19 @@
+---
+# AXP fork: fixes to AXP's Scripts/Common/Functions.sh
+
+# getDefconfig() joins Board*.mk defconfigs with `tr '\n' ' '`, leaving a trailing space.
+# hardenDefconfig() quotes "$defconfigPath", so for single-defconfig devices (e.g. rhodep's
+# vendor/holi-qgki_defconfig) it writes all hardening into a new file named "..._defconfig "
+# and the real defconfig stays unhardened.
+- name: "Functions fixup: strip trailing space from getDefconfig output"
+  ansible.builtin.replace:
+    path: "{{ DOSPATH }}/Scripts/Common/Functions.sh"
+    regexp: "(-exec grep -oE ' \\[0-9a-zA-Z/_-\\]\\+_defconfig' \\{\\} \\\\;\\); do realpath --relative-to=\\. arch/arm\\*/configs/\\$i 2>/dev/null ;done \\| tr '\\\\n' ' ')$"
+    replace: "\\1 | sed 's/ *$//'"
+
+# rhodep's 5.4 kernel supports INIT_ON_ALLOC/FREE_DEFAULT_ON
+- name: "Functions fixup: treat motorola/sm6375 as a modern kernel"
+  ansible.builtin.replace:
+    path: "{{ DOSPATH }}/Scripts/Common/Functions.sh"
+    regexp: "^(\\s*modernKernels=\\('fairphone/sm7225' )(?!'motorola/sm6375')"
+    replace: "\\1'motorola/sm6375' "

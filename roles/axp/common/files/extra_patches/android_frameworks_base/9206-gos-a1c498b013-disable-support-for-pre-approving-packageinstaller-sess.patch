@@ -1,0 +1,26 @@
+From a1c498b013ec141d85ebdb7f56ea2f4b2be64313 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Fri, 22 Dec 2023 11:44:00 +0200
+Subject: [PATCH] disable support for pre-approving PackageInstaller sessions
+
+APK is not yet available at the time of pre-approval request, which is incompatible with the
+"Allow Network permission" checkbox in the confirmation dialog.
+
+See PackageInstaller.Session#requestUserPreapproval() for more info.
+---
+ core/res/res/values/config.xml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/core/res/res/values/config.xml b/core/res/res/values/config.xml
+index 419a5f67aea87..1706887578ab2 100644
+--- a/core/res/res/values/config.xml
++++ b/core/res/res/values/config.xml
+@@ -7084,7 +7084,7 @@
+          the underlying display device changes. -->
+     <bool name="config_persistBrightnessNitsForDefaultDisplay">false</bool>
+     <!-- Whether to request the approval before commit sessions. -->
+-    <bool name="config_isPreApprovalRequestAvailable">true</bool>
++    <bool name="config_isPreApprovalRequestAvailable">false</bool>
+ 
+     <!-- Whether the AOSP support for app cloning building blocks is to be enabled for the
+          device. -->

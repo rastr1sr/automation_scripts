@@ -1,0 +1,28 @@
+From ef06f07b71eea41f0a85d6fa17f65b4e6e3c9fe0 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Fri, 18 Oct 2024 11:39:47 +0300
+Subject: [PATCH] don't enable "send device name" option by default for new
+ Wi-Fi networks
+
+---
+ src/com/android/settings/wifi/WifiConfigController2.java | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/com/android/settings/wifi/WifiConfigController2.java b/src/com/android/settings/wifi/WifiConfigController2.java
+index 1ea0103c28e..ed1d56d3ec6 100644
+--- a/src/com/android/settings/wifi/WifiConfigController2.java
++++ b/src/com/android/settings/wifi/WifiConfigController2.java
+@@ -313,6 +313,13 @@ private void initWifiConfigController2(WifiEntry wifiEntry) {
+             mPrivacySettingsSpinner = mView.findViewById(R.id.privacy_settings);
+             if (Flags.androidVWifiApi()) {
+                 mDhcpSettingsSpinner = mView.findViewById(R.id.dhcp_settings);
++                if (mDhcpSettingsSpinner != null) {
++                    int selection = 1;
++                    if (WifiPrivacyPreferenceController.Companion.translatePrefValueToSendDhcpHostnameEnabled(selection)) {
++                        throw new IllegalStateException("unexpected order of DHCP hostname setting entries");
++                    }
++                    mDhcpSettingsSpinner.setSelection(selection);
++                }
+             }
+             mView.findViewById(R.id.privacy_settings_fields).setVisibility(View.VISIBLE);
+         }

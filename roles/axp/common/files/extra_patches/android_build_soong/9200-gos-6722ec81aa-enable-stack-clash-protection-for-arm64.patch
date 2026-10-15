@@ -1,0 +1,21 @@
+From 6722ec81aa951375933b5d6d61942b56cf699d01 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <daniel.micay@grapheneos.org>
+Date: Mon, 21 Oct 2024 08:03:17 -0400
+Subject: [PATCH] enable stack clash protection for arm64
+
+---
+ cc/config/arm64_device.go | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/cc/config/arm64_device.go b/cc/config/arm64_device.go
+index 25787b36bd..a3fb47e956 100644
+--- a/cc/config/arm64_device.go
++++ b/cc/config/arm64_device.go
+@@ -25,6 +25,7 @@ var (
+ 	arm64Cflags = []string{
+ 		// Help catch common 32/64-bit errors.
+ 		"-Werror=implicit-function-declaration",
++		"-fstack-clash-protection",
+ 	}
+ 
+ 	arm64ArchVariantCflags = map[string][]string{

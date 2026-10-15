@@ -16,3 +16,6 @@
 - name: "A15: extra privacy patches (AXP fork)"
   ansible.builtin.include_tasks: extra_patches.yml
   when: android_shortversion == "a15"
+
+- name: "AXP Functions.sh fixups (AXP fork)"
+  ansible.builtin.include_tasks: axp_functions_fixups.yml

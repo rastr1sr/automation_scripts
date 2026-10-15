@@ -1,0 +1,49 @@
+From 23bdbf5e0ebe41bf76782159f2f379dd39509588 Mon Sep 17 00:00:00 2001
+From: Rastrisr <rastrisr@tutamail.com>
+Date: Thu, 15 Oct 2026 01:18:09 +0000
+Subject: [PATCH] Revert "SystemUI: Allow skipping mirroring confirmation
+ dialog"
+
+This reverts commit 6815cc423fe22ff5b08b2ee1d341253f3a52fce3.
+---
+ .../ui/viewmodel/ConnectingDisplayViewModel.kt       | 12 ------------
+ 1 file changed, 12 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/display/ui/viewmodel/ConnectingDisplayViewModel.kt b/packages/SystemUI/src/com/android/systemui/display/ui/viewmodel/ConnectingDisplayViewModel.kt
+index e34489890..7ba15a6cf 100644
+--- a/packages/SystemUI/src/com/android/systemui/display/ui/viewmodel/ConnectingDisplayViewModel.kt
++++ b/packages/SystemUI/src/com/android/systemui/display/ui/viewmodel/ConnectingDisplayViewModel.kt
+@@ -17,7 +17,6 @@ package com.android.systemui.display.ui.viewmodel
+ 
+ import android.app.Dialog
+ import android.content.Context
+-import android.os.SystemProperties
+ import com.android.server.policy.feature.flags.Flags
+ import com.android.systemui.CoreStartable
+ import com.android.systemui.biometrics.Utils
+@@ -90,12 +89,6 @@ constructor(
+ 
+     private fun showDialog(pendingDisplay: PendingDisplay, concurrentDisplaysInProgess: Boolean) {
+         dismissDialog()
+-
+-        if (SystemProperties.getBoolean(DISABLE_MIRRORING_CONFIRMATION_DIALOG, false)) {
+-            scope.launch(context = bgDispatcher) { pendingDisplay.enable() }
+-            return
+-        }
+-
+         dialog =
+             bottomSheetFactory
+                 .createDialog(
+@@ -125,9 +118,4 @@ constructor(
+         @ClassKey(ConnectingDisplayViewModel::class)
+         fun bindsConnectingDisplayViewModel(impl: ConnectingDisplayViewModel): CoreStartable
+     }
+-
+-    companion object {
+-        private const val DISABLE_MIRRORING_CONFIRMATION_DIALOG =
+-            "persist.sysui.disable_mirroring_confirmation_dialog"
+-    }
+ }
+-- 
+2.43.0
+

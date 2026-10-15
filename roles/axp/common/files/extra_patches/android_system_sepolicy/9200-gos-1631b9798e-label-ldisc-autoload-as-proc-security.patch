@@ -1,0 +1,21 @@
+From 1631b9798e6416113e39b1a36177059bac9d5359 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Tue, 25 Oct 2022 17:58:49 -0400
+Subject: [PATCH] label ldisc_autoload as proc_security
+
+---
+ private/genfs_contexts | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/private/genfs_contexts b/private/genfs_contexts
+index 90634347ef..310ed3158a 100644
+--- a/private/genfs_contexts
++++ b/private/genfs_contexts
+@@ -41,6 +41,7 @@ genfscon proc /swaps u:object_r:proc_swaps:s0
+ genfscon proc /sysrq-trigger u:object_r:proc_sysrq:s0
+ genfscon proc /kpageflags u:object_r:proc_kpageflags:s0
+ genfscon proc /sys/abi/swp u:object_r:proc_abi:s0
++genfscon proc /sys/dev/tty/ldisc_autoload u:object_r:proc_security:s0
+ genfscon proc /sys/fs/pipe-max-size u:object_r:proc_pipe_conf:s0
+ genfscon proc /sys/fs/protected_fifos u:object_r:proc_security:s0
+ genfscon proc /sys/fs/protected_hardlinks u:object_r:proc_security:s0

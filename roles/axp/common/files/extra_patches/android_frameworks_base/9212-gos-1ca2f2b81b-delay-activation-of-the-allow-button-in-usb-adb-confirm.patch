@@ -1,0 +1,34 @@
+From 1ca2f2b81b067bff973370e64b96c7500ffe33cb Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Thu, 5 Dec 2024 15:26:07 +0200
+Subject: [PATCH] delay activation of the Allow button in USB ADB confirmation
+ dialog
+
+---
+ .../src/com/android/systemui/usb/UsbDebuggingActivity.java  | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java b/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java
+index 42563fd479d12..0ad5eaaaf6bc6 100644
+--- a/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java
++++ b/packages/SystemUI/src/com/android/systemui/usb/UsbDebuggingActivity.java
+@@ -35,6 +35,7 @@
+ import android.view.View;
+ import android.view.Window;
+ import android.view.WindowManager;
++import android.widget.Button;
+ import android.widget.CheckBox;
+ 
+ import com.android.internal.app.AlertActivity;
+@@ -102,6 +103,11 @@ public void onCreate(Bundle icicle) {
+         window.setCloseOnTouchOutside(false);
+ 
+         setupAlert();
++
++        // reduce the chance of accidental Allow button tap
++        Button allowButton = mAlert.getButton(DialogInterface.BUTTON_POSITIVE);
++        allowButton.setEnabled(false);
++        getMainThreadHandler().postDelayed(() -> allowButton.setEnabled(true), 1000);
+     }
+ 
+     @Override

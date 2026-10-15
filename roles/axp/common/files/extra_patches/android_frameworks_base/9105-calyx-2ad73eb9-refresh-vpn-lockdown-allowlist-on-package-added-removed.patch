@@ -1,0 +1,79 @@
+From 2ad73eb9b7448390a2a416ce073c8ccff6a92559 Mon Sep 17 00:00:00 2001
+From: Oliver Scott <olivercscott@gmail.com>
+Date: Thu, 5 Jan 2023 19:44:46 -0500
+Subject: [PATCH] Refresh vpn lockdown allowlist on package added/removed
+
+Change-Id: Ie609ea275ed339ff67928a79701a123f883618fd
+---
+ .../java/com/android/server/VpnManagerService.java     |  4 ++++
+ .../core/java/com/android/server/connectivity/Vpn.java | 10 +++++++---
+ 2 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/services/core/java/com/android/server/VpnManagerService.java b/services/core/java/com/android/server/VpnManagerService.java
+index 080680d911a6..2a8cab16cc89 100644
+--- a/services/core/java/com/android/server/VpnManagerService.java
++++ b/services/core/java/com/android/server/VpnManagerService.java
+@@ -893,6 +893,8 @@ public class VpnManagerService extends IVpnManager.Stub {
+             }
+ 
+             vpn.refreshPlatformVpnAppExclusionList();
++            vpn.setAlwaysOnPackage(vpn.getAlwaysOnPackage(), vpn.getLockdown(),
++                    vpn.getLockdownAllowlist());
+ 
+             if (TextUtils.equals(vpn.getPackage(), packageName) && userId == UserHandle.USER_SYSTEM
+                     && vpn.isGlobalVpn()) {
+@@ -914,6 +916,8 @@ public class VpnManagerService extends IVpnManager.Stub {
+ 
+             if (vpn != null && !isReplacing) {
+                 vpn.refreshPlatformVpnAppExclusionList();
++                vpn.setAlwaysOnPackage(vpn.getAlwaysOnPackage(), vpn.getLockdown(),
++                        vpn.getLockdownAllowlist());
+             }
+         }
+     }
+diff --git a/services/core/java/com/android/server/connectivity/Vpn.java b/services/core/java/com/android/server/connectivity/Vpn.java
+index cad0739bd20e..c8ed95d32bed 100644
+--- a/services/core/java/com/android/server/connectivity/Vpn.java
++++ b/services/core/java/com/android/server/connectivity/Vpn.java
+@@ -1047,12 +1047,14 @@ public class Vpn {
+ 
+         if (isCurrentPreparedPackage(packageName)) {
+             updateAlwaysOnNotification(mNetworkInfo.getDetailedState());
+-            setVpnForcedLocked(mLockdown);
++            final boolean anyAllowlistChange = setVpnForcedLocked(mLockdown);
+ 
+             // Lockdown forces the VPN to be non-bypassable (see #agentConnect) because it makes
+             // no sense for a VPN to be bypassable when connected but not when not connected.
+             // As such, changes in lockdown need to restart the agent.
+-            if (mNetworkAgent != null && oldLockdownState != mLockdown) {
++            // Changes in the lockdown allowlist must also restart the agent to ensure that
++            // the VPN's ranges properly exclude or include allowlisted UIDs.
++            if (mNetworkAgent != null && (anyAllowlistChange || oldLockdownState != mLockdown)) {
+                 startNewNetworkAgent(mNetworkAgent, "Lockdown mode changed");
+             }
+         } else {
+@@ -2071,11 +2073,12 @@ public class Vpn {
+      * @param enforce {@code true} to require that all traffic under the jurisdiction of this
+      *                {@link Vpn} goes through a VPN connection or is blocked until one is
+      *                available, {@code false} to lift the requirement.
++     * @return {@code true} if any lockdown ranges changed.
+      *
+      * @see #mBlockedUidsAsToldToConnectivity
+      */
+     @GuardedBy("this")
+-    private void setVpnForcedLocked(boolean enforce) {
++    private boolean setVpnForcedLocked(boolean enforce) {
+         final List<String> exemptedPackages;
+         if (isNullOrLegacyVpn(mPackage)) {
+             exemptedPackages = null;
+@@ -2146,6 +2149,7 @@ public class Vpn {
+         setAllowOnlyVpnForUids(false, rangesToRemove);
+         // If nothing should be blocked now, this will now be a no-op.
+         setAllowOnlyVpnForUids(true, rangesToAdd);
++        return !rangesToRemove.isEmpty() || !rangesToAdd.isEmpty();
+     }
+ 
+     /**
+-- 
+GitLab
+

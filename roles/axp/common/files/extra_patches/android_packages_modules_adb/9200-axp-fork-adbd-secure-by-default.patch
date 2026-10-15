@@ -1,0 +1,30 @@
+From 076f9de0989b8d2bfff8cd8341bfe7cd92d81abd Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Thu, 15 Oct 2026 06:08:06 +0000
+Subject: [PATCH] adbd: require authentication when ro.adb.secure is unset
+
+On an unlocked bootloader adbd falls back to ro.adb.secure, and a missing
+property meant no authentication. Fail closed instead; builds that really
+want open adb (eng) set ro.adb.secure=0 explicitly. Inspired by RestlessOS.
+
+Change-Id: I39875790fb7848003cbc4a640bc095e4fc9d222a
+---
+ daemon/main.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/daemon/main.cpp b/daemon/main.cpp
+index 0d8c821..756d9b8 100644
+--- a/daemon/main.cpp
++++ b/daemon/main.cpp
+@@ -221,7 +221,7 @@ int adbd_main() {
+     bool device_unlocked = android::base::GetProperty("ro.boot.verifiedbootstate", "") == "orange";
+     if (device_unlocked || __android_log_is_debuggable()) {
+         // If we're on userdebug/eng or the device is unlocked, permit no-authentication.
+-        auth_required = android::base::GetBoolProperty("ro.adb.secure", false);
++        auth_required = android::base::GetBoolProperty("ro.adb.secure", true);
+ #if defined(__ANDROID_RECOVERY__)
+         auth_required &= android::base::GetBoolProperty("ro.adb.secure.recovery", true);
+ #endif
+-- 
+2.43.0
+

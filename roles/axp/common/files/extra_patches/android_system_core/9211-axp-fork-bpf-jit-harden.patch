@@ -1,0 +1,27 @@
+From 242ccfb109aee9cb9e359b8559f563e621dad618 Mon Sep 17 00:00:00 2001
+From: Rastrisr <rastrisr@tutamail.com>
+Date: Thu, 15 Oct 2026 06:00:40 +0000
+Subject: [PATCH] init: bpf_jit_harden=2
+
+Constant blinding for all BPF JIT programs (GrapheneOS kernel 05cc7f86 sets this default).
+
+Change-Id: Idc4e2154c348df513b794b71bb4d21405c0f273d
+---
+ rootdir/init.rc | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/rootdir/init.rc b/rootdir/init.rc
+index 8447fe1..bbde45c 100644
+--- a/rootdir/init.rc
++++ b/rootdir/init.rc
+@@ -339,6 +339,7 @@ on init
+     write /proc/sys/fs/protected_fifos 2
+     write /proc/sys/fs/protected_regular 2
+     write /proc/sys/dev/tty/ldisc_autoload 0
++    write /proc/sys/net/core/bpf_jit_harden 2
+     write /proc/sys/net/ipv6/conf/all/use_tempaddr 2
+     write /proc/sys/net/ipv6/conf/all/max_addresses 128
+     write /proc/sys/net/ipv6/conf/all/temp_prefered_lft 21600
+-- 
+2.43.0
+

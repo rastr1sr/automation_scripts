@@ -1,0 +1,30 @@
+From c9e2f48f823086f8913e7ee0762a4e6721c05840 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Thu, 15 Oct 2026 06:06:28 +0000
+Subject: [PATCH] config: generic default Bluetooth name
+
+Bluetooth falls back to ro.product.model when bluetooth.device.default_name is
+unset, broadcasting the phone model to anyone scanning nearby.
+
+Change-Id: Ifdf7ca4f23d0b703b140eaee8d4b3a5eb4876b2a
+---
+ config/common.mk | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/config/common.mk b/config/common.mk
+index 2a2e38f..ca032d5 100644
+--- a/config/common.mk
++++ b/config/common.mk
+@@ -24,6 +24,9 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+ endif
+ endif
+ 
++# Generic Bluetooth name instead of the device model (privacy)
++PRODUCT_SYSTEM_DEFAULT_PROPERTIES += bluetooth.device.default_name=Android
++
+ ifeq ($(TARGET_BUILD_VARIANT),eng)
+ # Disable ADB authentication
+ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += ro.adb.secure=0
+-- 
+2.43.0
+

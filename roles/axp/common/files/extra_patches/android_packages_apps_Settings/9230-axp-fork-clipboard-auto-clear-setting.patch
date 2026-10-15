@@ -1,0 +1,145 @@
+From 67da714fb51a164309c26651aa79358a1932bedc Mon Sep 17 00:00:00 2001
+From: Rastrisr <rastrisr@tutamail.com>
+Date: Thu, 15 Oct 2026 06:00:05 +0000
+Subject: [PATCH] Settings: clipboard auto clear timeout
+
+UI for ClipboardService CLIPBOARD_AUTO_CLEAR_ENABLED/_TIMEOUT (crDroid/CalyxOS framework part). Replaces crDroid 80273620, which used LineageSettings preferences and crDroid-only resources.
+
+Change-Id: Icbfc1f7263e1463dcba75bc3bc3de9eba8e28c57
+---
+ res/values/calyx_arrays.xml                   | 15 +++++
+ res/values/calyx_strings.xml                  |  7 +++
+ res/xml/more_security_privacy_settings.xml    |  9 +++
+ ...lipboardAutoClearPreferenceController.java | 60 +++++++++++++++++++
+ 4 files changed, 91 insertions(+)
+ create mode 100644 src/com/android/settings/privacy/ClipboardAutoClearPreferenceController.java
+
+diff --git a/res/values/calyx_arrays.xml b/res/values/calyx_arrays.xml
+index 9eb654b..19910de 100644
+--- a/res/values/calyx_arrays.xml
++++ b/res/values/calyx_arrays.xml
+@@ -17,4 +17,19 @@
+         <!-- Do not translate. -->
+         <item>10</item>
+     </string-array>
++
++    <string-array name="clipboard_auto_clear_entries">
++        <item>@string/clipboard_auto_clear_never</item>
++        <item>@string/clipboard_auto_clear_1min</item>
++        <item>@string/clipboard_auto_clear_5min</item>
++        <item>@string/clipboard_auto_clear_15min</item>
++        <item>@string/clipboard_auto_clear_1hour</item>
++    </string-array>
++    <string-array name="clipboard_auto_clear_values" translatable="false">
++        <item>0</item>
++        <item>60000</item>
++        <item>300000</item>
++        <item>900000</item>
++        <item>3600000</item>
++    </string-array>
+ </resources>
+diff --git a/res/values/calyx_strings.xml b/res/values/calyx_strings.xml
+index b21337d..dc51fa5 100644
+--- a/res/values/calyx_strings.xml
++++ b/res/values/calyx_strings.xml
+@@ -13,4 +13,11 @@
+     <string name="maximum_failed_passwords_for_wipe_summary"><xliff:g id="failed_passwords_description">%1$s</xliff:g></string>
+     <string name="maximum_failed_passwords_for_wipe_summary_5_attempts">Erase all data after 5 failed unlock attempts</string>
+     <string name="maximum_failed_passwords_for_wipe_summary_10_attempts">Erase all data after 10 failed unlock attempts</string>
++    <!-- AXP fork: clipboard auto clear -->
++    <string name="clipboard_auto_clear_title">Clear clipboard automatically</string>
++    <string name="clipboard_auto_clear_never">Never</string>
++    <string name="clipboard_auto_clear_1min">After 1 minute</string>
++    <string name="clipboard_auto_clear_5min">After 5 minutes</string>
++    <string name="clipboard_auto_clear_15min">After 15 minutes</string>
++    <string name="clipboard_auto_clear_1hour">After 1 hour</string>
+ </resources>
+diff --git a/res/xml/more_security_privacy_settings.xml b/res/xml/more_security_privacy_settings.xml
+index 83db42d..ea1da72 100644
+--- a/res/xml/more_security_privacy_settings.xml
++++ b/res/xml/more_security_privacy_settings.xml
+@@ -105,6 +105,15 @@
+             settings:controller=
+                 "com.android.settings.privacy.CameraExtensionsFallbackPreferenceController" />
+ 
++        <!-- Clipboard auto clear (AXP fork) -->
++        <ListPreference
++            android:key="privacy_clipboard_auto_clear"
++            android:title="@string/clipboard_auto_clear_title"
++            android:entries="@array/clipboard_auto_clear_entries"
++            android:entryValues="@array/clipboard_auto_clear_values"
++            settings:controller=
++                "com.android.settings.privacy.ClipboardAutoClearPreferenceController" />
++
+         <!-- Strict location redaction -->
+         <SwitchPreference
+             android:key="privacy_strict_location_redaction"
+diff --git a/src/com/android/settings/privacy/ClipboardAutoClearPreferenceController.java b/src/com/android/settings/privacy/ClipboardAutoClearPreferenceController.java
+new file mode 100644
+index 0000000..139822a
+--- /dev/null
++++ b/src/com/android/settings/privacy/ClipboardAutoClearPreferenceController.java
+@@ -0,0 +1,60 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++// AXP fork: UI for clipboard auto clear (framework: ClipboardService reads
++// Settings.Secure CLIPBOARD_AUTO_CLEAR_ENABLED / _TIMEOUT; ported from crDroid/CalyxOS)
++package com.android.settings.privacy;
++
++import android.content.Context;
++import android.provider.Settings;
++
++import androidx.preference.ListPreference;
++import androidx.preference.Preference;
++
++import com.android.settings.R;
++import com.android.settings.core.BasePreferenceController;
++
++public class ClipboardAutoClearPreferenceController extends BasePreferenceController
++        implements Preference.OnPreferenceChangeListener {
++
++    private static final long DEFAULT_TIMEOUT_MS = 3600000L;
++
++    public ClipboardAutoClearPreferenceController(Context context, String key) {
++        super(context, key);
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        return AVAILABLE;
++    }
++
++    private long currentValue() {
++        final boolean enabled = Settings.Secure.getInt(mContext.getContentResolver(),
++                Settings.Secure.CLIPBOARD_AUTO_CLEAR_ENABLED, 1) == 1;
++        return enabled ? Settings.Secure.getLong(mContext.getContentResolver(),
++                Settings.Secure.CLIPBOARD_AUTO_CLEAR_TIMEOUT, DEFAULT_TIMEOUT_MS) : 0L;
++    }
++
++    @Override
++    public void updateState(Preference preference) {
++        final ListPreference p = (ListPreference) preference;
++        p.setValue(String.valueOf(currentValue()));
++        p.setSummary(p.getEntry());
++    }
++
++    @Override
++    public boolean onPreferenceChange(Preference preference, Object newValue) {
++        final long value = Long.parseLong((String) newValue);
++        Settings.Secure.putInt(mContext.getContentResolver(),
++                Settings.Secure.CLIPBOARD_AUTO_CLEAR_ENABLED, value > 0 ? 1 : 0);
++        if (value > 0) {
++            Settings.Secure.putLong(mContext.getContentResolver(),
++                    Settings.Secure.CLIPBOARD_AUTO_CLEAR_TIMEOUT, value);
++        }
++        final ListPreference p = (ListPreference) preference;
++        p.setValue((String) newValue);
++        p.setSummary(p.getEntry());
++        return true;
++    }
++}
+-- 
+2.43.0
+

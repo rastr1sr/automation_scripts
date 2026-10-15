@@ -1,0 +1,147 @@
+From e70acacac0f2e2ea2a9744a9018211864932df10 Mon Sep 17 00:00:00 2001
+From: DarkJoker360 <simoespo159@gmail.com>
+Date: Wed, 15 Apr 2020 15:09:40 +0000
+Subject: [PATCH] Ask pin for shutdown/reboot on secure lockscreen
+
+Based on: https://github.com/ezio84/abc_frameworks_base/commit/62537d0ea76331fe838f25732fbe38c69eb0904e
+
+[neobuddy89]
+* Code clean up, optimization and disabled by default.
+* Adapted for Android 11
+
+[jhenrique09]
+
+* Remove check for keyguard if advanced restart is enabled
+
+Change-Id: I668b36669905bbc664e3a3a4244f5235dde11881
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ .../GlobalActionsDialogLite.java              | 42 ++++++++++++++-----
+ 1 file changed, 32 insertions(+), 10 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
+index 7630f9f07..a4594a1ec 100644
+--- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
++++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
+@@ -845,6 +845,22 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+         }
+     }
+ 
++    private boolean rebootAction(boolean safeMode) {
++        return rebootAction(safeMode, null);
++    }
++
++    private boolean rebootAction(boolean safeMode, String reason) {
++        if (mKeyguardStateController.isMethodSecure() && mKeyguardStateController.isShowing()) {
++            mActivityStarter.postQSRunnableDismissingKeyguard(() -> {
++                mWindowManagerFuncs.reboot(safeMode, reason);
++            });
++            return true;
++        } else {
++            mWindowManagerFuncs.reboot(safeMode, reason);
++            return true;
++        }
++    }
++
+     /**
+      * Implements {@link GlobalActionsPanelPlugin.Callbacks#dismissGlobalActionsMenu()}, which is
+      * called when the quick access wallet requests dismissal.
+@@ -895,7 +911,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+             }
+             mUiEventLogger.log(GlobalActionsEvent.GA_SHUTDOWN_LONG_PRESS);
+             if (!mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT)) {
+-                mWindowManagerFuncs.reboot(true, null);
++                rebootAction(true);
+                 return true;
+             }
+             return false;
+@@ -920,7 +936,13 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+             }
+             mUiEventLogger.log(GlobalActionsEvent.GA_SHUTDOWN_PRESS);
+             // shutdown by making sure radio and power are handled accordingly.
+-            mWindowManagerFuncs.shutdown();
++            if (mKeyguardStateController.isMethodSecure() && mKeyguardStateController.isShowing()) {
++                  mActivityStarter.postQSRunnableDismissingKeyguard(() -> {
++                    mWindowManagerFuncs.shutdown();
++                });
++            } else {
++                mWindowManagerFuncs.shutdown();
++            }
+         }
+     }
+ 
+@@ -1043,7 +1065,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+             }
+             mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_LONG_PRESS);
+             if (!mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT)) {
+-                mWindowManagerFuncs.reboot(true, null);
++                rebootAction(true);
+                 return true;
+             }
+             return false;
+@@ -1070,7 +1092,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+             if (mDialog != null && shouldShowRestartSubmenu()) {
+                 mDialog.showRestartOptionsMenu();
+             } else {
+-                mWindowManagerFuncs.reboot(false, null);
++                rebootAction(false);
+             }
+         }
+     }
+@@ -1084,7 +1106,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+         @Override
+         public boolean onLongPress() {
+             if (!mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT)) {
+-                mWindowManagerFuncs.reboot(true, null);
++                rebootAction(true);
+                 return true;
+             }
+             return false;
+@@ -1102,7 +1124,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+ 
+         @Override
+         public void onPress() {
+-            mWindowManagerFuncs.reboot(false, null);
++            rebootAction(false);
+         }
+     }
+ 
+@@ -1124,7 +1146,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+ 
+         @Override
+         public void onPress() {
+-            mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_RECOVERY);
++            rebootAction(false, PowerManager.REBOOT_RECOVERY);
+         }
+     }
+ 
+@@ -1146,7 +1168,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+ 
+         @Override
+         public void onPress() {
+-            mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_BOOTLOADER);
++            rebootAction(false, PowerManager.REBOOT_BOOTLOADER);
+         }
+     }
+ 
+@@ -1168,7 +1190,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+ 
+         @Override
+         public void onPress() {
+-            mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_FASTBOOT);
++            rebootAction(false, PowerManager.REBOOT_FASTBOOT);
+         }
+     }
+ 
+@@ -1190,7 +1212,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+ 
+         @Override
+         public void onPress() {
+-            mWindowManagerFuncs.reboot(false, PowerManager.REBOOT_DOWNLOAD);
++            rebootAction(false, PowerManager.REBOOT_DOWNLOAD);
+         }
+     }
+ 
+-- 
+2.43.0
+

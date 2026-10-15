@@ -1,0 +1,90 @@
+From f729aa556ca156f01986ece301a136194bfa5511 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Thu, 15 Oct 2026 11:47:14 +0000
+Subject: [PATCH] deny new USB devices while locked
+
+Sets security.deny_new_usb=1 while a secure keyguard is showing (init writes it to
+kernel.deny_new_usb). Toggle: Settings.Global.DENY_NEW_USB, default on.
+Based on the GrapheneOS/linux-hardened deny_new_usb feature.
+
+Change-Id: I3d8d78349897c9d2ee451e3b92ba1d23cc537e62
+---
+ core/java/android/provider/Settings.java       |  7 +++++++
+ .../policy/keyguard/KeyguardStateMonitor.java  | 18 ++++++++++++++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 8ab23bbe2..d43b328f5 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -17683,6 +17683,13 @@ public final class Settings {
+         @Readable
+         public static final String DEVICE_NAME = "device_name";
+ 
++        /**
++         * Whether newly connected USB devices are ignored by the kernel while the device is
++         * locked (kernel.deny_new_usb). 1 = enabled (default), 0 = disabled.
++         * @hide
++         */
++        public static final String DENY_NEW_USB = "deny_new_usb";
++
+         /**
+          * Whether the NetworkScoringService has been first initialized.
+          * <p>
+diff --git a/services/core/java/com/android/server/policy/keyguard/KeyguardStateMonitor.java b/services/core/java/com/android/server/policy/keyguard/KeyguardStateMonitor.java
+index 6e086c6c2..c8ff6c7ee 100644
+--- a/services/core/java/com/android/server/policy/keyguard/KeyguardStateMonitor.java
++++ b/services/core/java/com/android/server/policy/keyguard/KeyguardStateMonitor.java
+@@ -19,6 +19,8 @@ package com.android.server.policy.keyguard;
+ import android.app.ActivityManager;
+ import android.content.Context;
+ import android.os.RemoteException;
++import android.os.SystemProperties;
++import android.provider.Settings;
+ import android.util.Slog;
+ 
+ import com.android.internal.policy.IKeyguardService;
+@@ -48,10 +50,12 @@ public class KeyguardStateMonitor extends IKeyguardStateCallback.Stub {
+     private int mCurrentUserId;
+ 
+     private final LockPatternUtils mLockPatternUtils;
++    private final Context mContext;
+     private final StateCallback mCallback;
+ 
+     public KeyguardStateMonitor(Context context, IKeyguardService service, StateCallback callback) {
+         mLockPatternUtils = new LockPatternUtils(context);
++        mContext = context;
+         mCurrentUserId = ActivityManager.getCurrentUser();
+         mCallback = callback;
+ 
+@@ -87,6 +91,7 @@ public class KeyguardStateMonitor extends IKeyguardStateCallback.Stub {
+         if (userId != mCurrentUserId) return;
+ 
+         mIsShowing = showing;
++        updateDenyNewUsb();
+ 
+         mCallback.onShowingChanged();
+ 
+@@ -97,6 +102,19 @@ public class KeyguardStateMonitor extends IKeyguardStateCallback.Stub {
+         }
+     }
+ 
++    // AXP fork: ignore newly connected USB devices while a secure keyguard is showing
++    // (kernel.deny_new_usb via init property trigger, see system/core init.rc)
++    private void updateDenyNewUsb() {
++        final boolean enabled = Settings.Global.getInt(mContext.getContentResolver(),
++                Settings.Global.DENY_NEW_USB, 1) != 0;
++        final boolean deny = enabled && mIsShowing && mLockPatternUtils.isSecure(mCurrentUserId);
++        try {
++            SystemProperties.set("security.deny_new_usb", deny ? "1" : "0");
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "Failed to update deny_new_usb", e);
++        }
++    }
++
+     @Override // Binder interface
+     public void onSimSecureStateChanged(boolean simSecure) {
+         mSimSecure = simSecure;
+-- 
+2.43.0
+

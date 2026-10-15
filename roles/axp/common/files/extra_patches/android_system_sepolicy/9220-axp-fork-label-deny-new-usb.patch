@@ -1,0 +1,39 @@
+From 68692734ad2d9a7e916dc291be2dbdd5a51144dc Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Thu, 15 Oct 2026 11:47:38 +0000
+Subject: [PATCH] label kernel.deny_new_usb (proc_security) and
+ security.deny_new_usb (system_prop)
+
+Change-Id: If1fa3327417f26af8fcbe27fea4a92c7f43265c1
+---
+ private/genfs_contexts    | 1 +
+ private/property_contexts | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/private/genfs_contexts b/private/genfs_contexts
+index 2fb08af..fecf65a 100644
+--- a/private/genfs_contexts
++++ b/private/genfs_contexts
+@@ -42,6 +42,7 @@ genfscon proc /sysrq-trigger u:object_r:proc_sysrq:s0
+ genfscon proc /kpageflags u:object_r:proc_kpageflags:s0
+ genfscon proc /sys/abi/swp u:object_r:proc_abi:s0
+ genfscon proc /sys/dev/tty/ldisc_autoload u:object_r:proc_security:s0
++genfscon proc /sys/kernel/deny_new_usb u:object_r:proc_security:s0
+ genfscon proc /sys/fs/pipe-max-size u:object_r:proc_pipe_conf:s0
+ genfscon proc /sys/fs/protected_fifos u:object_r:proc_security:s0
+ genfscon proc /sys/fs/protected_hardlinks u:object_r:proc_security:s0
+diff --git a/private/property_contexts b/private/property_contexts
+index 2eece31..00a12f3 100644
+--- a/private/property_contexts
++++ b/private/property_contexts
+@@ -63,6 +63,7 @@ persist.debug.          u:object_r:persist_debug_prop:s0
+ persist.debug.user_mode_emulation u:object_r:system_user_mode_emulation_prop:s0
+ persist.native_debug    u:object_r:system_prop:s0
+ persist.keyguard.camera u:object_r:system_prop:s0
++security.deny_new_usb u:object_r:system_prop:s0
+ logd.                   u:object_r:logd_prop:s0
+ persist.logd.           u:object_r:logd_prop:s0
+ ro.logd.                u:object_r:logd_prop:s0
+-- 
+2.43.0
+

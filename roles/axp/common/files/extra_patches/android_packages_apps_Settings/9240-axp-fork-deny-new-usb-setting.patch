@@ -1,0 +1,98 @@
+From 87372966d90b6e27f116304111f1c025be0b9b45 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Thu, 15 Oct 2026 11:48:46 +0000
+Subject: [PATCH] Settings: Security > Block new USB devices when locked
+
+Change-Id: I8b798102ab010887517ef875fb3278a0456d3683
+---
+ res/values/calyx_strings.xml                  |  3 ++
+ res/xml/security_dashboard_settings.xml       |  7 +++
+ .../DenyNewUsbPreferenceController.java       | 46 +++++++++++++++++++
+ 3 files changed, 56 insertions(+)
+ create mode 100644 src/com/android/settings/security/DenyNewUsbPreferenceController.java
+
+diff --git a/res/values/calyx_strings.xml b/res/values/calyx_strings.xml
+index 69adad9..bb689a6 100644
+--- a/res/values/calyx_strings.xml
++++ b/res/values/calyx_strings.xml
+@@ -30,4 +30,7 @@
+     <string name="hotspot_timeout_10min">After 10 minutes without devices</string>
+     <string name="hotspot_timeout_30min">After 30 minutes without devices</string>
+     <string name="hotspot_timeout_1hour">After 1 hour without devices</string>
++    <!-- AXP fork: deny new USB devices while locked -->
++    <string name="deny_new_usb_title">Block new USB devices when locked</string>
++    <string name="deny_new_usb_summary">USB devices connected while the phone is locked are ignored until you unlock and reconnect them. Charging is not affected.</string>
+ </resources>
+diff --git a/res/xml/security_dashboard_settings.xml b/res/xml/security_dashboard_settings.xml
+index 9da0524..03763b7 100644
+--- a/res/xml/security_dashboard_settings.xml
++++ b/res/xml/security_dashboard_settings.xml
+@@ -69,6 +69,13 @@
+             android:entries="@array/auto_reboot_entries"
+             android:entryValues="@array/auto_reboot_values" />
+ 
++        <!-- AXP fork: deny new USB devices while locked -->
++        <SwitchPreference
++            android:key="deny_new_usb"
++            android:title="@string/deny_new_usb_title"
++            android:summary="@string/deny_new_usb_summary"
++            settings:controller="com.android.settings.security.DenyNewUsbPreferenceController" />
++
+         <SwitchPreference
+             android:key="exec_spawn"
+             android:title="@string/exec_spawn_title"
+diff --git a/src/com/android/settings/security/DenyNewUsbPreferenceController.java b/src/com/android/settings/security/DenyNewUsbPreferenceController.java
+new file mode 100644
+index 0000000..b7e295e
+--- /dev/null
++++ b/src/com/android/settings/security/DenyNewUsbPreferenceController.java
+@@ -0,0 +1,46 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++// AXP fork: toggle for kernel.deny_new_usb while locked (Settings.Global.DENY_NEW_USB,
++// applied by KeyguardStateMonitor in system_server)
++package com.android.settings.security;
++
++import android.content.Context;
++import android.provider.Settings;
++
++import com.android.settings.core.TogglePreferenceController;
++
++public class DenyNewUsbPreferenceController extends TogglePreferenceController {
++
++    public DenyNewUsbPreferenceController(Context context, String key) {
++        super(context, key);
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        return AVAILABLE;
++    }
++
++    @Override
++    public boolean isChecked() {
++        return Settings.Global.getInt(mContext.getContentResolver(),
++                Settings.Global.DENY_NEW_USB, 1) != 0;
++    }
++
++    @Override
++    public boolean setChecked(boolean isChecked) {
++        return Settings.Global.putInt(mContext.getContentResolver(),
++                Settings.Global.DENY_NEW_USB, isChecked ? 1 : 0);
++    }
++
++    @Override
++    public boolean isSliceable() {
++        return false;
++    }
++
++    @Override
++    public int getSliceHighlightMenuRes() {
++        return NO_RES;
++    }
++}
+-- 
+2.43.0
+

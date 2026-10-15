@@ -1,0 +1,28 @@
+From 3f0afd4d676c79c2d27b814f2a862fef8c2e12f0 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Thu, 15 Oct 2026 11:47:37 +0000
+Subject: [PATCH] init: apply security.deny_new_usb to kernel.deny_new_usb
+
+Change-Id: If57912e8d1331593bb5f8b55fc7b4539c2bc9b58
+---
+ rootdir/init.rc | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/rootdir/init.rc b/rootdir/init.rc
+index bbde45c..8e0a279 100644
+--- a/rootdir/init.rc
++++ b/rootdir/init.rc
+@@ -1411,3 +1411,10 @@ on property:sys.snapshotctl.map=requested
+ on property:sys.snapshotctl.unmap=requested
+     exec - root root system -- /system/bin/snapshotctl unmap
+     setprop sys.snapshotctl.unmap "finished"
++
++# AXP fork: deny newly connected USB devices while locked (set by system_server)
++on property:security.deny_new_usb=1
++    write /proc/sys/kernel/deny_new_usb 1
++
++on property:security.deny_new_usb=0
++    write /proc/sys/kernel/deny_new_usb 0
+-- 
+2.43.0
+

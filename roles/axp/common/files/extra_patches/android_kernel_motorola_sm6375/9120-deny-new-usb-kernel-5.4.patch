@@ -1,0 +1,77 @@
+From b0620b0c793d8ffe2e2922ef01c8c6a8b4df5651 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Thu, 15 Oct 2026 11:45:00 +0000
+Subject: [PATCH] add toggle for disabling newly added USB devices
+
+Ported from GrapheneOS kernel_common-6.1 8fb5db25d894 (linux-hardened) to 5.4:
+the sysctl lives in kernel/sysctl.c here. kernel.deny_new_usb=1 makes the USB
+hub ignore newly connected devices; already-connected devices keep working.
+---
+ drivers/usb/core/hub.c |  8 ++++++++
+ kernel/sysctl.c        | 17 +++++++++++++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/drivers/usb/core/hub.c b/drivers/usb/core/hub.c
+index 2911bd777..c30ca68c1 100644
+--- a/drivers/usb/core/hub.c
++++ b/drivers/usb/core/hub.c
+@@ -61,6 +61,8 @@
+  */
+ #define USB_SS_PORT_U0_WAKE_TIME	200  /* ms */
+ 
++extern int deny_new_usb;
++
+ /* Protect struct usb_device->state and ->children members
+  * Note: Both are also protected by ->dev.sem, except that ->state can
+  * change to USB_STATE_NOTATTACHED even when the semaphore isn't held. */
+@@ -5144,6 +5146,12 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
+ 			goto done;
+ 		return;
+ 	}
++
++	if (deny_new_usb) {
++		dev_err(&port_dev->dev, "denied insert of USB device on port %d\n", port1);
++		goto done;
++	}
++
+ 	if (hub_is_superspeed(hub->hdev))
+ 		unit_load = 150;
+ 	else
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index 6ec1bb514..45e1f6f30 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -406,6 +406,12 @@ static int bpf_stats_handler(struct ctl_table *table, int write,
+ }
+ #endif
+ 
++/* External variables not in a header file. */
++#if IS_ENABLED(CONFIG_USB)
++int deny_new_usb __read_mostly = 0;
++EXPORT_SYMBOL(deny_new_usb);
++#endif
++
+ static struct ctl_table kern_table[] = {
+ 	{
+ 		.procname	= "sched_child_runs_first",
+@@ -1277,6 +1283,17 @@ static struct ctl_table kern_table[] = {
+ 		.extra1		= SYSCTL_ZERO,
+ 		.extra2		= SYSCTL_ONE,
+ 	},
++#if IS_ENABLED(CONFIG_USB)
++	{
++		.procname	= "deny_new_usb",
++		.data		= &deny_new_usb,
++		.maxlen		= sizeof(int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec_minmax_sysadmin,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= SYSCTL_ONE,
++	},
++#endif
+ 	{
+ 		.procname	= "kptr_restrict",
+ 		.data		= &kptr_restrict,
+-- 
+2.43.0
+

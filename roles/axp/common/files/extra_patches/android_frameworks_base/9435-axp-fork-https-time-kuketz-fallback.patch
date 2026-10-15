@@ -1,0 +1,26 @@
+From 4680449e6d3d169a93ade4b929886e15371e6298 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Thu, 15 Oct 2026 11:51:17 +0000
+Subject: [PATCH] HTTPS time: add Kuketz as fallback endpoint (Date header)
+
+Change-Id: If956717b7431d5b4101f71f71b345f609269f787
+---
+ core/res/res/values/config.xml | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/core/res/res/values/config.xml b/core/res/res/values/config.xml
+index fad960bff..9e23d8efa 100644
+--- a/core/res/res/values/config.xml
++++ b/core/res/res/values/config.xml
+@@ -2701,6 +2701,8 @@
+ 
+     <string-array translatable="false" name="config_httpsTimeUrls">
+         <item>https://time.grapheneos.org/generate_204</item>
++        <!-- AXP fork: fallback (less precise Date header) -->
++        <item>https://captiveportal.kuketz.de/generate_204</item>
+     </string-array>
+ 
+     <java-symbol type="array" name="config_httpsTimeUrls" />
+-- 
+2.43.0
+

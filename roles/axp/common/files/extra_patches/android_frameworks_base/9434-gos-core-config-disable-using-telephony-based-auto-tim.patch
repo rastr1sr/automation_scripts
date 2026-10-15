@@ -1,0 +1,24 @@
+From f65e2365a7ea00720fdfb36dd836c710b72456af Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Wed, 22 Feb 2023 14:18:13 -0500
+Subject: [PATCH] core/config: disable using telephony-based auto time
+
+---
+ core/res/res/values/config.xml | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/core/res/res/values/config.xml b/core/res/res/values/config.xml
+index 0b91893e3..fad960bff 100644
+--- a/core/res/res/values/config.xml
++++ b/core/res/res/values/config.xml
+@@ -2020,7 +2020,6 @@
+          See com.android.server.timedetector.TimeDetectorStrategy for available sources. -->
+     <string-array name="config_autoTimeSourcesPriority">
+         <item>network</item>
+-        <item>telephony</item>
+     </string-array>
+ 
+     <!-- The difference in millis that has to exist between a time suggestion under
+-- 
+2.43.0
+

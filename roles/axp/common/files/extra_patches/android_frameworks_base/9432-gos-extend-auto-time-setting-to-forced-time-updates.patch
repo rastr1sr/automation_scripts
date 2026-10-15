@@ -1,0 +1,31 @@
+From 8eca5c4bc09ed4dbded2f55bb6b530f15de9272d Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Wed, 24 Jan 2024 19:56:01 +0200
+Subject: [PATCH] extend auto-time setting to forced time updates
+
+Original commit: c1d9385442ef0b620527f6e46e37bff35425b4d8
+---
+ core/java/android/util/NtpTrustedTime.java | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/core/java/android/util/NtpTrustedTime.java b/core/java/android/util/NtpTrustedTime.java
+index afcbf1b9a..cf64566ca 100644
+--- a/core/java/android/util/NtpTrustedTime.java
++++ b/core/java/android/util/NtpTrustedTime.java
+@@ -302,6 +302,13 @@ public abstract class NtpTrustedTime implements TrustedTime {
+     private boolean forceRefreshLocked(@NonNull Network network) {
+         Objects.requireNonNull(network);
+ 
++        final ContentResolver resolver = getContext().getContentResolver();
++
++        if (Settings.Global.getInt(resolver, Settings.Global.AUTO_TIME, 0) == 0) {
++            Log.d(TAG, "skipped forceRefresh: auto time is disabled");
++            return false;
++        }
++
+         if (!isNetworkConnected(network)) {
+             if (LOGD) Log.d(TAG, "forceRefreshLocked: network=" + network + " is not connected");
+             return false;
+-- 
+2.43.0
+

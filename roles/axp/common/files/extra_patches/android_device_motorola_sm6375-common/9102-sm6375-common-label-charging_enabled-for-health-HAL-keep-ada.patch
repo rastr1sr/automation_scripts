@@ -1,0 +1,37 @@
+From ab3d9bcba373786a22f3a6c20fffce8d9ac97209 Mon Sep 17 00:00:00 2001
+From: Rastrisr <rastrisr@tutamail.com>
+Date: Thu, 15 Oct 2026 04:39:42 +0000
+Subject: [PATCH] sm6375-common: label charging_enabled for health HAL, keep
+ adaptive charging perms
+
+---
+ rootdir/etc/init/hw/init.mmi.chipset.rc | 3 +++
+ sepolicy/vendor/genfs_contexts          | 2 ++
+ 2 files changed, 5 insertions(+)
+ create mode 100644 sepolicy/vendor/genfs_contexts
+
+diff --git a/rootdir/etc/init/hw/init.mmi.chipset.rc b/rootdir/etc/init/hw/init.mmi.chipset.rc
+index a9f2f7d..06a80ca 100644
+--- a/rootdir/etc/init/hw/init.mmi.chipset.rc
++++ b/rootdir/etc/init/hw/init.mmi.chipset.rc
+@@ -10,6 +10,9 @@ on boot
+     # Set adaptive charging perms for HAL
+     chown system system /sys/module/qpnp_adaptive_charge/parameters/charging_enabled
+     chmod 0660 /sys/module/qpnp_adaptive_charge/parameters/charging_enabled
++    # AXP fork: keep Moto adaptive charging HAL access (removed upstream in lineage-23)
++    chown system system /sys/module/qpnp_adaptive_charge/parameters/upper_limit
++    chown system system /sys/module/qpnp_adaptive_charge/parameters/lower_limit
+ 
+ on property:sys.boot_completed=1
+     write /sys/devices/platform/soc/soc:mmi,charger/state_sync 1
+diff --git a/sepolicy/vendor/genfs_contexts b/sepolicy/vendor/genfs_contexts
+new file mode 100644
+index 0000000..bf0efeb
+--- /dev/null
++++ b/sepolicy/vendor/genfs_contexts
+@@ -0,0 +1,2 @@
++# AXP fork: let the Lineage Health HAL (charging control) write the charge switch
++genfscon sysfs /module/qpnp_adaptive_charge/parameters/charging_enabled u:object_r:sysfs_battery_supply:s0
+-- 
+2.43.0
+

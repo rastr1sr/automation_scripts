@@ -1,0 +1,48 @@
+From f49afd869b192050a1d4a68700e58cde7bd137ab Mon Sep 17 00:00:00 2001
+From: Michael Bestas <mkbestas@lineageos.org>
+Date: Fri, 3 Mar 2023 23:43:42 +0200
+Subject: [PATCH] sm6375-common: Build Lineage Health HAL
+
+Change-Id: I70cc903a03ac9fa3303bb8fa039c9de4806449bf
+---
+ common.mk                               | 6 ++++++
+ rootdir/etc/init/hw/init.mmi.chipset.rc | 6 +++---
+ 2 files changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/common.mk b/common.mk
+index 13ffeb2..c127f59 100644
+--- a/common.mk
++++ b/common.mk
+@@ -203,6 +203,12 @@ PRODUCT_PACKAGES += \
+ $(call soong_config_set,livedisplay_sdm,enable_dm,false)
+ $(call soong_config_set,livedisplay_sysfs,enable_se,true)
+ 
++# Lineage Health
++PRODUCT_PACKAGES += \
++    vendor.lineage.health-service.default
++
++$(call soong_config_set,lineage_health,charging_control_charging_path,/sys/module/qpnp_adaptive_charge/parameters/charging_enabled)
++
+ # Media
+ PRODUCT_COPY_FILES += \
+     $(LOCAL_PATH)/media/blair/media_codecs_performance_blair.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_performance_blair.xml \
+diff --git a/rootdir/etc/init/hw/init.mmi.chipset.rc b/rootdir/etc/init/hw/init.mmi.chipset.rc
+index 1961d5e..a9f2f7d 100644
+--- a/rootdir/etc/init/hw/init.mmi.chipset.rc
++++ b/rootdir/etc/init/hw/init.mmi.chipset.rc
+@@ -7,9 +7,9 @@ on early-boot
+     chown system system /sys/devices/platform/soc/4804000.ufshc/ufshid/trigger
+ 
+ on boot
+-   # Set adaptive charging perms for HAL
+-   chown system system /sys/module/qpnp_adaptive_charge/parameters/upper_limit
+-   chown system system /sys/module/qpnp_adaptive_charge/parameters/lower_limit
++    # Set adaptive charging perms for HAL
++    chown system system /sys/module/qpnp_adaptive_charge/parameters/charging_enabled
++    chmod 0660 /sys/module/qpnp_adaptive_charge/parameters/charging_enabled
+ 
+ on property:sys.boot_completed=1
+     write /sys/devices/platform/soc/soc:mmi,charger/state_sync 1
+-- 
+2.43.0
+

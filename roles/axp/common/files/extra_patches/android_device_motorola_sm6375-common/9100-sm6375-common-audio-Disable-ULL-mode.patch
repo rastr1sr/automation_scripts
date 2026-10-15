@@ -1,0 +1,141 @@
+From f2bc9606969a2636c889e8fe2e0d9387a3e76a76 Mon Sep 17 00:00:00 2001
+From: LuK1337 <priv.luk@gmail.com>
+Date: Sat, 25 Oct 2025 13:18:18 +0530
+Subject: [PATCH] sm6375-common: audio: Disable ULL mode
+
+ * Ultra low latency playback is currently broken. Crackling audio
+   can be well noticed while playing WhatsApp audio messages or even
+   during some games.
+ * This patch routes all audio that normally used audio-ull-playback
+   paths to low-latency-playback paths instead, thus meaning we're
+   switching from ULL to LL mode.
+
+Change-Id: I7d672f1ff10b984c8096c9c4ca83475e730fd16f
+---
+ audio/audio_policy_configuration.xml          | 29 ++++++++-----------
+ ..._policy_configuration_offload_disabled.xml | 29 ++++++++-----------
+ 2 files changed, 24 insertions(+), 34 deletions(-)
+
+diff --git a/audio/audio_policy_configuration.xml b/audio/audio_policy_configuration.xml
+index 197e350..c04734a 100644
+--- a/audio/audio_policy_configuration.xml
++++ b/audio/audio_policy_configuration.xml
+@@ -99,11 +99,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+                     <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
+                              samplingRates="48000" channelMasks="AUDIO_CHANNEL_OUT_STEREO"/>
+                 </mixPort>
+-                <mixPort name="raw" role="source"
+-                        flags="AUDIO_OUTPUT_FLAG_FAST|AUDIO_OUTPUT_FLAG_RAW">
+-                    <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
+-                             samplingRates="48000" channelMasks="AUDIO_CHANNEL_OUT_STEREO"/>
+-                </mixPort>
+                 <mixPort name="deep_buffer" role="source"
+                         flags="AUDIO_OUTPUT_FLAG_DEEP_BUFFER">
+                     <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
+@@ -360,31 +355,31 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+             <!-- route declaration, i.e. list all available sources for a given sink -->
+             <routes>
+                 <route type="mix" sink="Earpiece"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
+                 <route type="mix" sink="Speaker"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
+                 <route type="mix" sink="Wired Headset"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
+                 <route type="mix" sink="Wired Headphones"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
+                 <route type="mix" sink="Line"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
+                 <route type="mix" sink="HDMI"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,compress_passthrough,voip_rx"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,compress_passthrough,voip_rx"/>
+                 <route type="mix" sink="Proxy"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload"/>
+                 <route type="mix" sink="FM"
+                        sources="primary output"/>
+                 <route type="mix" sink="BT SCO"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
+                 <route type="mix" sink="BT SCO Headset"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
+                 <route type="mix" sink="BT SCO Car Kit"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
+                 <route type="mix" sink="USB Device Out"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out,hifi_playback"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out,hifi_playback"/>
+                 <route type="mix" sink="USB Headset Out"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out,hifi_playback"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out,hifi_playback"/>
+                 <route type="mix" sink="Telephony Tx"
+                        sources="voice_tx,incall_music_uplink"/>
+                 <route type="mix" sink="voice_rx"
+diff --git a/audio/audio_policy_configuration_offload_disabled.xml b/audio/audio_policy_configuration_offload_disabled.xml
+index 3cfb1dc..62b6633 100644
+--- a/audio/audio_policy_configuration_offload_disabled.xml
++++ b/audio/audio_policy_configuration_offload_disabled.xml
+@@ -99,11 +99,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+                     <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
+                              samplingRates="48000" channelMasks="AUDIO_CHANNEL_OUT_STEREO"/>
+                 </mixPort>
+-                <mixPort name="raw" role="source"
+-                        flags="AUDIO_OUTPUT_FLAG_FAST|AUDIO_OUTPUT_FLAG_RAW">
+-                    <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
+-                             samplingRates="48000" channelMasks="AUDIO_CHANNEL_OUT_STEREO"/>
+-                </mixPort>
+                 <mixPort name="deep_buffer" role="source"
+                         flags="AUDIO_OUTPUT_FLAG_DEEP_BUFFER">
+                     <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
+@@ -345,31 +340,31 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+             <!-- route declaration, i.e. list all available sources for a given sink -->
+             <routes>
+                 <route type="mix" sink="Earpiece"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
+                 <route type="mix" sink="Speaker"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
+                 <route type="mix" sink="Wired Headset"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
+                 <route type="mix" sink="Wired Headphones"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
+                 <route type="mix" sink="Line"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out"/>
+                 <route type="mix" sink="HDMI"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,compress_passthrough,voip_rx"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,compress_passthrough,voip_rx"/>
+                 <route type="mix" sink="Proxy"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload"/>
+                 <route type="mix" sink="FM"
+                        sources="primary output"/>
+                 <route type="mix" sink="BT SCO"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
+                 <route type="mix" sink="BT SCO Headset"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
+                 <route type="mix" sink="BT SCO Car Kit"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx"/>
+                 <route type="mix" sink="USB Device Out"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out,hifi_playback"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out,hifi_playback"/>
+                 <route type="mix" sink="USB Headset Out"
+-                       sources="primary output,raw,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out,hifi_playback"/>
++                       sources="primary output,deep_buffer,direct_pcm,compressed_offload,voip_rx,mmap_no_irq_out,hifi_playback"/>
+                 <route type="mix" sink="Telephony Tx"
+                        sources="voice_tx,incall_music_uplink"/>
+                 <route type="mix" sink="voice_rx"
+-- 
+2.43.0
+

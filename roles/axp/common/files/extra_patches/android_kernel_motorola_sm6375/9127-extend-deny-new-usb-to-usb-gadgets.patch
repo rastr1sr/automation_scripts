@@ -1,0 +1,39 @@
+From ba7c0ebad92addd4f382afa704ca9b6adac89c0a Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Thu, 15 Oct 2026 12:18:20 +0000
+Subject: [PATCH] extend deny_new_usb to USB gadgets
+
+Ported from GrapheneOS kernel_common-6.1 7f7bc865d5e1 to 5.4 (usb_gadget_connect). Unlike GrapheneOS, kept on the same kernel.deny_new_usb sysctl: while locked, the phone no longer presents itself as a new USB device to a computer; charging is unaffected.
+---
+ drivers/usb/gadget/udc/core.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/usb/gadget/udc/core.c b/drivers/usb/gadget/udc/core.c
+index 095ef2e1b..7f5cc05ab 100644
+--- a/drivers/usb/gadget/udc/core.c
++++ b/drivers/usb/gadget/udc/core.c
+@@ -664,6 +664,8 @@ EXPORT_SYMBOL_GPL(usb_gadget_vbus_disconnect);
+  *
+  * Returns zero on success, else negative errno.
+  */
++extern int deny_new_usb;
++
+ int usb_gadget_connect(struct usb_gadget *gadget)
+ {
+ 	int ret = 0;
+@@ -673,6 +675,12 @@ int usb_gadget_connect(struct usb_gadget *gadget)
+ 		goto out;
+ 	}
+ 
++	if (deny_new_usb) {
++		dev_err(&gadget->dev, "blocked USB gadget connection\n");
++		ret = -EPERM;
++		goto out;
++	}
++
+ 	if (gadget->deactivated) {
+ 		/*
+ 		 * If gadget is deactivated we only save new state.
+-- 
+2.43.0
+

@@ -1,0 +1,47 @@
+From a109df9c15b02b62e6534c44345446044fc1f9dc Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Thu, 15 Oct 2026 12:22:36 +0000
+Subject: [PATCH] mark slub runtime configuration as __ro_after_init
+
+Ported from GrapheneOS kernel_common-6.1 441ec4b15a00 to 5.4 (no slub_debug_string here).
+---
+ mm/slub.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/mm/slub.c b/mm/slub.c
+index 638736789..3252f60b8 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -486,13 +486,13 @@ static inline void *restore_red_left(struct kmem_cache *s, void *p)
+  * Debug settings:
+  */
+ #if defined(CONFIG_SLUB_DEBUG_ON)
+-static slab_flags_t slub_debug = DEBUG_DEFAULT_FLAGS;
++static slab_flags_t slub_debug __ro_after_init = DEBUG_DEFAULT_FLAGS;
+ #else
+-static slab_flags_t slub_debug;
++static slab_flags_t slub_debug __ro_after_init;
+ #endif
+ 
+ static char *slub_debug_slabs;
+-static int disable_higher_order_debug;
++static int disable_higher_order_debug __ro_after_init;
+ 
+ /*
+  * slub is about to manipulate internal object metadata.  This memory lies
+@@ -3363,9 +3363,9 @@ EXPORT_SYMBOL(kmem_cache_alloc_bulk);
+  * and increases the number of allocations possible without having to
+  * take the list_lock.
+  */
+-static unsigned int slub_min_order;
+-static unsigned int slub_max_order = PAGE_ALLOC_COSTLY_ORDER;
+-static unsigned int slub_min_objects;
++static unsigned int slub_min_order __ro_after_init;
++static unsigned int slub_max_order __ro_after_init = PAGE_ALLOC_COSTLY_ORDER;
++static unsigned int slub_min_objects __ro_after_init;
+ 
+ /*
+  * Calculate the order of allocation given an slab object size.
+-- 
+2.43.0
+

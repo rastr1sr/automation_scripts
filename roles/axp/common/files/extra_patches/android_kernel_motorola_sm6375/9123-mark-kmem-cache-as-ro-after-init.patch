@@ -1,0 +1,26 @@
+From 506969c1bd264f73b8ff637c80890fc64af43e54 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Thu, 15 Oct 2026 12:17:37 +0000
+Subject: [PATCH] mark kmem_cache as __ro_after_init
+
+From GrapheneOS kernel_common-6.1 f7ee8d7a1e9c (applied with fuzz on 5.4)
+---
+ mm/slab_common.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mm/slab_common.c b/mm/slab_common.c
+index f024c2067..083e50eba 100644
+--- a/mm/slab_common.c
++++ b/mm/slab_common.c
+@@ -36,7 +36,7 @@
+ enum slab_state slab_state;
+ LIST_HEAD(slab_caches);
+ DEFINE_MUTEX(slab_mutex);
+-struct kmem_cache *kmem_cache;
++struct kmem_cache *kmem_cache __ro_after_init;
+ 
+ #ifdef CONFIG_HARDENED_USERCOPY
+ bool usercopy_fallback __ro_after_init =
+-- 
+2.43.0
+

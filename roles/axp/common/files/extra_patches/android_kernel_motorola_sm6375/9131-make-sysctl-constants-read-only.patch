@@ -1,0 +1,87 @@
+From d2b70a1bb6947cf2cad5d5e7a5416d184b56278a Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Thu, 15 Oct 2026 12:22:36 +0000
+Subject: [PATCH] make sysctl constants read-only
+
+Ported from GrapheneOS kernel_common-6.1 56cf0a127c8c to 5.4: the 5.4 min/max constants live in kernel/sysctl.c and are never written.
+---
+ kernel/sysctl.c | 44 ++++++++++++++++++++++----------------------
+ 1 file changed, 22 insertions(+), 22 deletions(-)
+
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index 45e1f6f30..159649ebf 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -122,39 +122,39 @@ extern int sysctl_nr_trim_pages;
+ 
+ /* Constants used for minimum and  maximum */
+ #ifdef CONFIG_LOCKUP_DETECTOR
+-static int sixty = 60;
++static int sixty __read_only = 60;
+ #endif
+ 
+-static int __maybe_unused neg_one = -1;
++static int __maybe_unused neg_one __read_only = -1;
+ 
+-static int __maybe_unused two = 2;
+-static int __maybe_unused four = 4;
+-static unsigned long zero_ul;
+-static unsigned long one_ul = 1;
+-static unsigned long long_max = LONG_MAX;
+-static int one_hundred = 100;
+-static int one_thousand = 1000;
++static int __maybe_unused two __read_only = 2;
++static int __maybe_unused four __read_only = 4;
++static unsigned long zero_ul __read_only;
++static unsigned long one_ul __read_only = 1;
++static unsigned long long_max __read_only = LONG_MAX;
++static int one_hundred __read_only = 100;
++static int one_thousand __read_only = 1000;
+ #ifdef CONFIG_QCOM_HYP_CORE_CTL
+-static int five_hundred = 500;
+-static int five_thousand = 5000;
++static int five_hundred __read_only = 500;
++static int five_thousand __read_only = 5000;
+ #endif
+ #ifdef CONFIG_PRINTK
+-static int ten_thousand = 10000;
++static int ten_thousand __read_only = 10000;
+ #endif
+ #ifdef CONFIG_PERF_EVENTS
+-static int six_hundred_forty_kb = 640 * 1024;
++static int six_hundred_forty_kb __read_only = 640 * 1024;
+ #endif
+-static int __maybe_unused max_kswapd_threads = MAX_KSWAPD_THREADS;
++static int __maybe_unused max_kswapd_threads __read_only = MAX_KSWAPD_THREADS;
+ 
+ #ifdef CONFIG_SCHED_WALT
+-static int neg_three = -3;
+-static int three = 3;
+-static int fifty = 50;
+-static int two_hundred_fifty_five = 255;
++static int neg_three __read_only = -3;
++static int three __read_only = 3;
++static int fifty __read_only = 50;
++static int two_hundred_fifty_five __read_only = 255;
+ const int sched_user_hint_max = 1000;
+-static unsigned int ns_per_sec = NSEC_PER_SEC;
+-static unsigned int one_hundred_thousand = 100000;
+-static unsigned int two_hundred_million = 200000000;
++static unsigned int ns_per_sec __read_only = NSEC_PER_SEC;
++static unsigned int one_hundred_thousand __read_only = 100000;
++static unsigned int two_hundred_million __read_only = 200000000;
+ /*
+  * CFS task prio range is [100 ... 139]
+  * 120 is the default prio.
+@@ -174,7 +174,7 @@ static int maxolduid = 65535;
+ static int minolduid;
+ 
+ static int ngroups_max = NGROUPS_MAX;
+-static const int cap_last_cap = CAP_LAST_CAP;
++static const int cap_last_cap __read_only = CAP_LAST_CAP;
+ 
+ /*
+  * This is needed for proc_doulongvec_minmax of sysctl_hung_task_timeout_secs
+-- 
+2.43.0
+

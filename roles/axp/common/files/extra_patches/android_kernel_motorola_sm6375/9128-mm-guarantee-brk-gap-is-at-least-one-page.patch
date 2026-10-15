@@ -1,0 +1,29 @@
+From 07e3ba008877bf5872e880310fc8f8ca8829b4b3 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Thu, 15 Oct 2026 12:20:03 +0000
+Subject: [PATCH] mm: guarantee brk gap is at least one page
+
+Ported from GrapheneOS kernel_common-6.1 116249e8a501 to 5.4.
+---
+ mm/util.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/mm/util.c b/mm/util.c
+index 02ea29083..25f19c7cd 100644
+--- a/mm/util.c
++++ b/mm/util.c
+@@ -357,9 +357,9 @@ unsigned long arch_randomize_brk(struct mm_struct *mm)
+ {
+ 	/* Is the current task 32bit ? */
+ 	if (!IS_ENABLED(CONFIG_64BIT) || is_compat_task())
+-		return mm->brk + get_random_long() % SZ_32M;
++		return mm->brk + get_random_long() % SZ_32M + PAGE_SIZE;
+ 
+-	return mm->brk + get_random_long() % SZ_1G;
++	return mm->brk + get_random_long() % SZ_1G + PAGE_SIZE;
+ }
+ 
+ unsigned long arch_mmap_rnd(void)
+-- 
+2.43.0
+

@@ -1,0 +1,24 @@
+From 31eea8d286f80fd364c2d2825d578d4d185815be Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Sat, 1 Jun 2024 23:03:36 +0300
+Subject: [PATCH] allow vold to securely erase system DE storage encryption key
+
+---
+ private/vold.te | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/private/vold.te b/private/vold.te
+index 65a0993..e2c831e 100644
+--- a/private/vold.te
++++ b/private/vold.te
+@@ -149,6 +149,7 @@ allowxperm vold data_file_type:dir ioctl {
+ # tried first. Otherwise, FS_IOC_FIEMAP is needed to get the
+ # location of the file's blocks on the raw block device to erase.
+ allowxperm vold {
++  unencrypted_data_file
+   vold_data_file
+   vold_metadata_file
+   is_flag_enabled(RELEASE_UNLOCKED_STORAGE_API, `storage_area_key_file')
+-- 
+2.43.0
+

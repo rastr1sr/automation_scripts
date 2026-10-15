@@ -1,0 +1,144 @@
+From a531224c7d7b6b83c5325735722eecb3156f92f5 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Sat, 1 Jun 2024 22:50:49 +0300
+Subject: [PATCH] extend the upstream wipe-without-reboot implementation
+
+---
+ .../ExtendedWipeWithoutReboot.java            | 92 +++++++++++++++++++
+ .../recoverysystem/RecoverySystemService.java | 14 ++-
+ 2 files changed, 102 insertions(+), 4 deletions(-)
+ create mode 100644 services/core/java/com/android/server/recoverysystem/ExtendedWipeWithoutReboot.java
+
+diff --git a/services/core/java/com/android/server/recoverysystem/ExtendedWipeWithoutReboot.java b/services/core/java/com/android/server/recoverysystem/ExtendedWipeWithoutReboot.java
+new file mode 100644
+index 000000000..8c4e2f92e
+--- /dev/null
++++ b/services/core/java/com/android/server/recoverysystem/ExtendedWipeWithoutReboot.java
+@@ -0,0 +1,92 @@
++package com.android.server.recoverysystem;
++
++import android.annotation.UserIdInt;
++import android.content.Context;
++import android.content.pm.UserInfo;
++import android.os.IVold;
++import android.os.ServiceManager;
++import android.os.SystemClock;
++import android.os.SystemProperties;
++import android.os.UserHandle;
++import android.util.Slog;
++
++import com.android.server.LocalServices;
++import com.android.server.pm.UserManagerInternal;
++
++import java.util.List;
++
++import static java.util.Collections.emptyList;
++
++class ExtendedWipeWithoutReboot {
++    static final String TAG = "ExtWipeWithoutReboot";
++
++    static void run() {
++        eraseSecureElement();
++
++        IVold vold = null;
++        try {
++            vold = IVold.Stub.asInterface(ServiceManager.getServiceOrThrow("vold"));
++        } catch (Throwable e) {
++            Slog.e(TAG, "", e);
++        }
++
++        if (vold == null) {
++            Slog.e(TAG, "IVold is null");
++            return;
++        }
++
++        try {
++            var um = LocalServices.getService(UserManagerInternal.class);
++            for (int userId : um.getUserIds()) {
++                destroyUserStorageKeys(vold, userId);
++            }
++        } catch (Throwable e) {
++            Slog.e(TAG, "", e);
++        }
++
++        Slog.d(TAG, "calling vold.destroySystemStorageKey()");
++        try {
++            vold.destroySystemStorageKey();
++        } catch (Throwable e) {
++            Slog.e(TAG, "", e);
++        }
++
++        Slog.d(TAG, "calling vold.destroyMetadataKey(/data)");
++        try {
++            vold.destroyMetadataKey("/data");
++        } catch (Throwable e) {
++            Slog.e(TAG, "", e);
++        }
++    }
++
++    private static void eraseSecureElement() {
++        Slog.d(TAG, "eraseSecureElement start");
++        String prop = "sys.erase_secure_element";
++        try {
++            SystemProperties.set(prop, "start");
++            for (int i = 0; i < 500; ++i) {
++                // wait at most ~2.5 seconds
++                SystemClock.sleep(5);
++                if ("finished".equals(SystemProperties.get(prop))) {
++                    Slog.d(TAG, "eraseSecureElement end");
++                    return;
++                }
++            }
++            Slog.e(TAG, "eraseSecureElement timeout");
++        } catch (Throwable e) {
++            Slog.e(TAG, "", e);
++        }
++    }
++
++    private static void destroyUserStorageKeys(IVold vold, @UserIdInt int userId) {
++        Slog.d(TAG, "calling destroyUserStorageKeys for user " + userId);
++        try {
++            // calls destroyUserStorageKeys in vold
++            vold.destroyUserStorageKeys2(userId,
++                    // don't evict loaded keys, it's slow and might cause fatal IO errors
++                    false);
++        } catch (Throwable e) {
++            Slog.w(TAG, "destroyUserStorageKeys2 failed for " + userId, e);
++        }
++    }
++}
+diff --git a/services/core/java/com/android/server/recoverysystem/RecoverySystemService.java b/services/core/java/com/android/server/recoverysystem/RecoverySystemService.java
+index c24240b92..8042165f1 100644
+--- a/services/core/java/com/android/server/recoverysystem/RecoverySystemService.java
++++ b/services/core/java/com/android/server/recoverysystem/RecoverySystemService.java
+@@ -555,8 +555,8 @@ public class RecoverySystemService extends IRecoverySystem.Stub implements Reboo
+         Slogf.w(TAG, "deleteSecrets");
+         try {
+             AndroidKeyStoreMaintenance.deleteAllKeys();
+-        } catch (android.security.KeyStoreException e) {
+-            Log.wtf(TAG, "Failed to delete all keys from keystore.", e);
++        } catch (Throwable e) {
++            Slog.e(TAG, "Failed to delete all keys from keystore.", e);
+         }
+ 
+         try {
+@@ -565,8 +565,14 @@ public class RecoverySystemService extends IRecoverySystem.Stub implements Reboo
+                 Slogf.i(TAG, "ISecretkeeper.deleteAll();");
+                 secretKeeper.deleteAll();
+             }
+-        } catch (RemoteException e) {
+-            Log.wtf(TAG, "Failed to delete all secrets from secretkeeper.", e);
++        } catch (Throwable e) {
++            Slog.e(TAG, "Failed to delete all secrets from secretkeeper.", e);
++        }
++
++        try {
++            ExtendedWipeWithoutReboot.run();
++        } catch (Throwable e) {
++            Slog.e(TAG, "ExtendedWipeWithoutReboot failed", e);
+         }
+     }
+ 
+-- 
+2.43.0
+

@@ -1,0 +1,28 @@
+From b924449b051f56f4c56dfda07bbc266e21402a5b Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Thu, 15 Oct 2026 12:12:02 +0000
+Subject: [PATCH] duress wipe: skip Pixel-only secure element erase
+
+Change-Id: I2b980be7f353e114191959d66e3a59669b9fafd0
+---
+ .../server/recoverysystem/ExtendedWipeWithoutReboot.java      | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/services/core/java/com/android/server/recoverysystem/ExtendedWipeWithoutReboot.java b/services/core/java/com/android/server/recoverysystem/ExtendedWipeWithoutReboot.java
+index 8c4e2f92e..6a0fa536a 100644
+--- a/services/core/java/com/android/server/recoverysystem/ExtendedWipeWithoutReboot.java
++++ b/services/core/java/com/android/server/recoverysystem/ExtendedWipeWithoutReboot.java
+@@ -21,7 +21,9 @@ class ExtendedWipeWithoutReboot {
+     static final String TAG = "ExtWipeWithoutReboot";
+ 
+     static void run() {
+-        eraseSecureElement();
++        // AXP fork: no secure-element erase service on non-Pixel hardware; skipping avoids a
++        // pointless 2.5s wait between keystore key deletion and storage key destruction
++        // eraseSecureElement();
+ 
+         IVold vold = null;
+         try {
+-- 
+2.43.0
+

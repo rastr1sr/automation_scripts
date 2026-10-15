@@ -1,0 +1,92 @@
+From 0a78e602ac7c8d8a712db7c3652728294a722fc0 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Sat, 1 Jun 2024 23:06:54 +0300
+Subject: [PATCH] add API for destroying system DE storage encryption key
+
+Ported from GrapheneOS platform_system_vold 2025061900 (fuzzed past LineageOS changes).
+
+Change-Id: I1ad6d13edf1cd0b2d0687055e232be140ad9b22b
+---
+ FsCrypt.cpp                  | 8 ++++++++
+ FsCrypt.h                    | 1 +
+ VoldNativeService.cpp        | 7 +++++++
+ VoldNativeService.h          | 1 +
+ binder/android/os/IVold.aidl | 1 +
+ 5 files changed, 18 insertions(+)
+
+diff --git a/FsCrypt.cpp b/FsCrypt.cpp
+index 386cb62..4661487 100644
+--- a/FsCrypt.cpp
++++ b/FsCrypt.cpp
+@@ -729,6 +729,14 @@ static bool evict_user_keys(std::map<userid_t, UserPolicies>& policy_map, userid
+     return success;
+ }
+ 
++bool fscrypt_destroy_system_key() {
++    bool res = android::vold::destroyKey(device_key_path);
++    if (android::vold::pathExists(device_key_temp)) {
++        res &= android::vold::destroyKey(device_key_temp);
++    }
++    return res;
++}
++
+ // Evicts and destroys all CE and DE keys for a user.  This is called when the user is removed.
+ bool fscrypt_destroy_user_keys(userid_t user_id, bool evict) {
+     LOG(DEBUG) << "fscrypt_destroy_user_keys(" << user_id << ")";
+diff --git a/FsCrypt.h b/FsCrypt.h
+index a1b2fba..e7e282c 100644
+--- a/FsCrypt.h
++++ b/FsCrypt.h
+@@ -26,6 +26,7 @@ extern bool fscrypt_init_user0_done;
+ bool fscrypt_create_user_keys(userid_t user_id, bool ephemeral);
+ bool fscrypt_destroy_user_keys(userid_t user_id, bool evict);
+ bool fscrypt_set_ce_key_protection(userid_t user_id, const std::vector<uint8_t>& secret);
++bool fscrypt_destroy_system_key();
+ void fscrypt_deferred_fixate_ce_keys();
+ 
+ std::vector<int> fscrypt_get_unlocked_users();
+diff --git a/VoldNativeService.cpp b/VoldNativeService.cpp
+index ddb6945..2fb8fb5 100644
+--- a/VoldNativeService.cpp
++++ b/VoldNativeService.cpp
+@@ -964,6 +964,13 @@ binder::Status VoldNativeService::destroyMetadataKey(const std::string& mountPoi
+     return translateBool(destroy_mountpoint_metadata_key(mountPointPath));
+ }
+ 
++binder::Status VoldNativeService::destroySystemStorageKey() {
++    ENFORCE_SYSTEM_OR_ROOT;
++    ACQUIRE_CRYPT_LOCK;
++
++    return translateBool(fscrypt_destroy_system_key());
++}
++
+ binder::Status VoldNativeService::getStorageSize(int64_t* storageSize) {
+     ENFORCE_SYSTEM_OR_ROOT;
+     return translate(GetStorageSize(storageSize));
+diff --git a/VoldNativeService.h b/VoldNativeService.h
+index 95dd113..6975708 100644
+--- a/VoldNativeService.h
++++ b/VoldNativeService.h
+@@ -167,6 +167,7 @@ class VoldNativeService : public BinderService<VoldNativeService>, public os::Bn
+ 
+     binder::Status getStorageSize(int64_t* storageSize) override;
+     binder::Status destroyMetadataKey(const std::string& mountPointPath) override;
++    binder::Status destroySystemStorageKey() override;
+ };
+ 
+ }  // namespace vold
+diff --git a/binder/android/os/IVold.aidl b/binder/android/os/IVold.aidl
+index bb40547..c9e74ea 100644
+--- a/binder/android/os/IVold.aidl
++++ b/binder/android/os/IVold.aidl
+@@ -137,6 +137,7 @@ interface IVold {
+ 
+     void destroyDsuMetadataKey(@utf8InCpp String dsuSlot);
+     void destroyMetadataKey(@utf8InCpp String mountPointPath);
++    void destroySystemStorageKey();
+ 
+     long getStorageSize();
+ 
+-- 
+2.43.0
+

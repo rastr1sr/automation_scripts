@@ -1,0 +1,102 @@
+From 7354a3165c9cc185da70244868258939028f36b6 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Sat, 1 Jun 2024 23:04:18 +0300
+Subject: [PATCH] add option to skip key eviction in destroyUserStorageKeys()
+
+Key eviction slows down key deletion and makes the OS more likely to crash due to an IO error,
+which matters when a wipe-without-reboot is being performed.
+
+Change-Id: If1bf2e50e498c491018ac26ad358994bb050bb3b
+---
+ FsCrypt.cpp                  | 8 +++++---
+ FsCrypt.h                    | 2 +-
+ VoldNativeService.cpp        | 9 ++++++++-
+ VoldNativeService.h          | 1 +
+ binder/android/os/IVold.aidl | 1 +
+ 5 files changed, 16 insertions(+), 5 deletions(-)
+
+diff --git a/FsCrypt.cpp b/FsCrypt.cpp
+index da9c0f1..386cb62 100644
+--- a/FsCrypt.cpp
++++ b/FsCrypt.cpp
+@@ -730,15 +730,17 @@ static bool evict_user_keys(std::map<userid_t, UserPolicies>& policy_map, userid
+ }
+ 
+ // Evicts and destroys all CE and DE keys for a user.  This is called when the user is removed.
+-bool fscrypt_destroy_user_keys(userid_t user_id) {
++bool fscrypt_destroy_user_keys(userid_t user_id, bool evict) {
+     LOG(DEBUG) << "fscrypt_destroy_user_keys(" << user_id << ")";
+     if (!IsFbeEnabled()) {
+         return true;
+     }
+     bool success = true;
+ 
+-    success &= evict_user_keys(s_ce_policies, user_id);
+-    success &= evict_user_keys(s_de_policies, user_id);
++    if (evict) {
++        success &= evict_user_keys(s_ce_policies, user_id);
++        success &= evict_user_keys(s_de_policies, user_id);
++    }
+ 
+     if (!s_ephemeral_users.erase(user_id)) {
+         auto ce_path = get_ce_key_directory_path(user_id);
+diff --git a/FsCrypt.h b/FsCrypt.h
+index d4a482c..a1b2fba 100644
+--- a/FsCrypt.h
++++ b/FsCrypt.h
+@@ -24,7 +24,7 @@ bool fscrypt_initialize_systemwide_keys();
+ bool fscrypt_init_user0();
+ extern bool fscrypt_init_user0_done;
+ bool fscrypt_create_user_keys(userid_t user_id, bool ephemeral);
+-bool fscrypt_destroy_user_keys(userid_t user_id);
++bool fscrypt_destroy_user_keys(userid_t user_id, bool evict);
+ bool fscrypt_set_ce_key_protection(userid_t user_id, const std::vector<uint8_t>& secret);
+ void fscrypt_deferred_fixate_ce_keys();
+ 
+diff --git a/VoldNativeService.cpp b/VoldNativeService.cpp
+index 3784487..9c08aed 100644
+--- a/VoldNativeService.cpp
++++ b/VoldNativeService.cpp
+@@ -629,7 +629,14 @@ binder::Status VoldNativeService::destroyUserStorageKeys(int32_t userId) {
+     ENFORCE_SYSTEM_OR_ROOT;
+     ACQUIRE_CRYPT_LOCK;
+ 
+-    return translateBool(fscrypt_destroy_user_keys(userId));
++    return translateBool(fscrypt_destroy_user_keys(userId, true));
++}
++
++binder::Status VoldNativeService::destroyUserStorageKeys2(int32_t userId, bool evict) {
++    ENFORCE_SYSTEM_OR_ROOT;
++    ACQUIRE_CRYPT_LOCK;
++
++    return translateBool(fscrypt_destroy_user_keys(userId, evict));
+ }
+ 
+ binder::Status VoldNativeService::setCeStorageProtection(int32_t userId,
+diff --git a/VoldNativeService.h b/VoldNativeService.h
+index a5253c0..3bda68e 100644
+--- a/VoldNativeService.h
++++ b/VoldNativeService.h
+@@ -117,6 +117,7 @@ class VoldNativeService : public BinderService<VoldNativeService>, public os::Bn
+ 
+     binder::Status createUserStorageKeys(int32_t userId, bool ephemeral);
+     binder::Status destroyUserStorageKeys(int32_t userId);
++    binder::Status destroyUserStorageKeys2(int32_t userId, bool evict);
+ 
+     binder::Status setCeStorageProtection(int32_t userId, const std::vector<uint8_t>& secret);
+ 
+diff --git a/binder/android/os/IVold.aidl b/binder/android/os/IVold.aidl
+index 810fdad..188760f 100644
+--- a/binder/android/os/IVold.aidl
++++ b/binder/android/os/IVold.aidl
+@@ -90,6 +90,7 @@ interface IVold {
+ 
+     void createUserStorageKeys(int userId, boolean ephemeral);
+     void destroyUserStorageKeys(int userId);
++    void destroyUserStorageKeys2(int userId, boolean evict);
+ 
+     void setCeStorageProtection(int userId, in byte[] secret);
+ 
+-- 
+2.43.0
+

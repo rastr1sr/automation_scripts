@@ -1,0 +1,36 @@
+From 29f355ca9242514c2660befaf66cb6d995623d56 Mon Sep 17 00:00:00 2001
+From: Rastrisr <rastrisr@tutamail.com>
+Date: Thu, 15 Oct 2026 02:17:09 +0000
+Subject: [PATCH] vendor: ship owner adb key (PRODUCT_ADB_KEYS)
+
+Recovery adbd then only accepts this key once 'Enable ADB' no longer disables auth.
+
+Change-Id: I35f6743ae32247edaec8decdfb9299e9db845c66
+---
+ config/axp-fork/adb_keys | 1 +
+ config/common.mk         | 3 +++
+ 2 files changed, 4 insertions(+)
+ create mode 100644 config/axp-fork/adb_keys
+
+diff --git a/config/axp-fork/adb_keys b/config/axp-fork/adb_keys
+new file mode 100644
+index 0000000..54a50cc
+--- /dev/null
++++ b/config/axp-fork/adb_keys
+@@ -0,0 +1 @@
++QAAAAE+sc0RRFXxcfRroZOnrD8mip8fFlAjintm2aFSkx/MVq/v5wha9SXQHaK41gJuEXLgqS0xgUrbOK+mshOl1gX0LGRVNo5r5JZg2foLUh80S4kqdLBxc4Rhq10gl+3WtZfi4ScxVI9cTtrdQqHxEgSwBz8zMYOOzjdHGUD/8oYUmZd6dIv6oqX7+cYzFgnDGMUqyYqdrpgSq5QXfudwqj2LgonR6OyLarOOOrahJMqrXUhZEMB9oUKLvYxS8UxtcXgyLzXFMdYNsbPuMwNdzR1nvPAcovA/H+sDzXAVIc4dEXY96t7+PG3Ao6hnLSsHnDsy4C27eek5SQKzLmSbo8l08gxahABSaoPVQNfe2N+ng41deE/kXpW8D7NVR/5wNIX1zKY7tAgY/Tt9+HoKnpEW0o97mQkwmA99TpVMWgKW4lc7Kkf+hra2V2uiXEJXkrk4gGetI6IJPDAk5gG1sDNpbcpHng1jBYvzHuMS2Le6z6s6na8jUVMPzZ8a3LTdbUZV/nNaIoO4+imf9n7pNZqdf2kQXlh3CvWCBkiA0dtwlkYg+OX0yfBwADARJlQhuYeeKmq+eUfc8YjVw8+hXEit2KyvjFLd8IefcETk209nHI0F1ML/eHx7jRgOUfWLhqkI9KBjhK1eWuv0AksFhgD258mdblSkKVIETahAcZDUkHgRfjgEAAQA= Pepet@THINKPAD
+\ No newline at end of file
+diff --git a/config/common.mk b/config/common.mk
+index 69d1141..2a2e38f 100644
+--- a/config/common.mk
++++ b/config/common.mk
+@@ -257,3 +257,6 @@ include vendor/lineage/config/version.mk
+ -include $(WORKSPACE)/build_env/image-auto-bits.mk
+ -include vendor/lineage/config/partner_gms.mk
+ include vendor/divested/divestos.mk
++
++# AXP fork: only the owner's PC may use the adb shell in recovery (and is pre-trusted in Android)
++PRODUCT_ADB_KEYS := vendor/lineage/config/axp-fork/adb_keys
+-- 
+2.43.0
+

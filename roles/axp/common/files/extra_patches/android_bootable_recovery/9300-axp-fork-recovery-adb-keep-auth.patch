@@ -1,0 +1,28 @@
+From 942af124f26fc93a2df6a133061ae27f76f319c7 Mon Sep 17 00:00:00 2001
+From: Rastrisr <rastrisr@tutamail.com>
+Date: Thu, 15 Oct 2026 02:17:10 +0000
+Subject: [PATCH] recovery: Enable ADB keeps authentication on
+
+LineageOS sets ro.adb.secure.recovery=0, giving unauthenticated adb on unlocked devices. Keep auth so only PRODUCT_ADB_KEYS can connect; sideload (minadbd) is unaffected.
+
+Change-Id: Iface4b123bcf8091354252eccf0a8b9c622184ce
+---
+ recovery.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/recovery.cpp b/recovery.cpp
+index 5ec14f1..a7cf6bb 100644
+--- a/recovery.cpp
++++ b/recovery.cpp
+@@ -624,7 +624,7 @@ change_menu:
+         break;
+ 
+       case Device::ENABLE_ADB:
+-        android::base::SetProperty("ro.adb.secure.recovery", "0");
++        // AXP fork: keep adb authentication on; only keys in /adb_keys (PRODUCT_ADB_KEYS) work
+         android::base::SetProperty("ctl.restart", "adbd");
+         device->RemoveMenuItemForAction(Device::ENABLE_ADB);
+         device->GoHome();
+-- 
+2.43.0
+

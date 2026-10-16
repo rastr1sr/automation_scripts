@@ -70,6 +70,17 @@
     replace: '#\1'
   when: android_version_int | int > 13
 
+# AXP fork: with the radio images dropped above, the device's vendor BoardConfig must not keep
+# listing those firmware partitions in AB_OTA_PARTITIONS, or add_img_to_target_files fails
+# ("Failed to find abl.img"). The phone keeps its installed firmware.
+- name: "Drop firmware partitions from vendor AB_OTA_PARTITIONS"
+  ansible.builtin.replace:
+    path: "{{ SRCPATH }}/vendor/{{ target_model_vendor | lower }}/{{ target_model }}/BoardConfigVendor.mk"
+    regexp: '(?m)^AB_OTA_PARTITIONS \+= \\\n(?:[ \t]+\S+[ \t]*\\\n)*[ \t]+\S+[ \t]*(?:\n|\Z)'
+    replace: "# AB_OTA_PARTITIONS for firmware removed by AXP.OS (radio images are not shipped)\n"
+  when: android_version_int | int > 13
+  failed_when: false
+
 - name: "Apply AXP.OS patches"
   ansible.builtin.shell: |
     {{ DOS_INIT }}

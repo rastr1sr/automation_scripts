@@ -1,0 +1,27 @@
+From a31d74a8132278f872c27e38e0630f65b4c4aa7e Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Fri, 16 Oct 2026 00:31:23 +0000
+Subject: [PATCH] fcm_exclude: drm@1.3/1.4 (Widevine deblobbed)
+
+---
+ compatibility_matrices/exclude/fcm_exclude.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/compatibility_matrices/exclude/fcm_exclude.cpp b/compatibility_matrices/exclude/fcm_exclude.cpp
+index 57e039c..ebc4e81 100644
+--- a/compatibility_matrices/exclude/fcm_exclude.cpp
++++ b/compatibility_matrices/exclude/fcm_exclude.cpp
+@@ -93,6 +93,10 @@ bool ShouldCheckMissingHidlHalsInFcm(const std::string& packageAndVersion) {
+             "android.hardware.drm@1.0",
+             "android.hardware.drm@1.1",
+             "android.hardware.drm@1.2",
++            // AXP fork: Widevine/DRM HALs are deblobbed (axp_deblobber_remove_widevine_drm), so
++            // the HIDL drm entries are stripped from the matrices while libmediadrm still builds them
++            "android.hardware.drm@1.3",
++            "android.hardware.drm@1.4",
+             "android.hardware.dumpstate@1.0",
+             "android.hardware.health@2.0",
+             "android.hardware.light@2.0",
+-- 
+2.43.0
+

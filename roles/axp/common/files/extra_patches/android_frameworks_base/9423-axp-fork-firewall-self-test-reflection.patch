@@ -1,0 +1,47 @@
+From 58a7d4149718d584c8d352b26de9dc3dfa3c18f0 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Fri, 16 Oct 2026 05:57:39 +0000
+Subject: [PATCH] firewall self-test: read the rule via reflection
+
+ConnectivityManager#getUidFirewallRule is @hide and not in the module-lib stubs services.core compiles against.
+---
+ .../server/net/NetworkPolicyManagerService.java  | 16 ++++++++++++++--
+ 1 file changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/services/core/java/com/android/server/net/NetworkPolicyManagerService.java b/services/core/java/com/android/server/net/NetworkPolicyManagerService.java
+index c7a19143a..3719a52b8 100644
+--- a/services/core/java/com/android/server/net/NetworkPolicyManagerService.java
++++ b/services/core/java/com/android/server/net/NetworkPolicyManagerService.java
+@@ -6625,15 +6625,27 @@ public class NetworkPolicyManagerService extends INetworkPolicyManager.Stub {
+     // didn't stick. ponytail: English-only notification text, no Settings status page.
+     private static final int FIREWALL_SELF_TEST_UID = Process.LAST_APPLICATION_UID;
+ 
++    // ConnectivityManager#getUidFirewallRule is @hide (not in the module-lib stubs that
++    // services.core compiles against), but callable from system_server at runtime.
++    private int readUidFirewallRule(int chain, int uid) {
++        try {
++            return (int) ConnectivityManager.class
++                    .getMethod("getUidFirewallRule", int.class, int.class)
++                    .invoke(mConnManager, chain, uid);
++        } catch (ReflectiveOperationException e) {
++            throw new IllegalStateException("getUidFirewallRule unavailable", e);
++        }
++    }
++
+     private void runFirewallSelfTest() {
+         final int chain = FIREWALL_CHAIN_OEM_DENY_2;
+         final int uid = FIREWALL_SELF_TEST_UID;
+         boolean ok;
+         try {
+             mConnManager.setUidFirewallRule(chain, uid, FIREWALL_RULE_DENY);
+-            ok = mConnManager.getUidFirewallRule(chain, uid) == FIREWALL_RULE_DENY;
++            ok = readUidFirewallRule(chain, uid) == FIREWALL_RULE_DENY;
+             mConnManager.setUidFirewallRule(chain, uid, FIREWALL_RULE_ALLOW);
+-            ok &= mConnManager.getUidFirewallRule(chain, uid) == FIREWALL_RULE_ALLOW;
++            ok &= readUidFirewallRule(chain, uid) == FIREWALL_RULE_ALLOW;
+         } catch (RuntimeException e) {
+             Slog.e(TAG, "Firewall self-test threw", e);
+             ok = false;
+-- 
+2.43.0
+

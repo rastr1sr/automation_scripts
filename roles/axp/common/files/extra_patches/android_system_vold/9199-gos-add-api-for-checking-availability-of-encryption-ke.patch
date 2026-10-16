@@ -1,0 +1,76 @@
+From 32a2c4e630a14cc0256057a020aa751a79bf9d4e Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Wed, 29 May 2024 19:41:32 +0300
+Subject: [PATCH] add API for checking availability of encryption keys for
+ non-CE storage
+
+It's used for testing the duress password feature.
+
+Change-Id: Ief5b6b1319a97e3b21d386df69592b2da56d9b44
+---
+ VoldNativeService.cpp        | 21 +++++++++++++++++++++
+ VoldNativeService.h          |  2 ++
+ binder/android/os/IVold.aidl |  2 ++
+ 3 files changed, 25 insertions(+)
+
+diff --git a/VoldNativeService.cpp b/VoldNativeService.cpp
+index 3784487..f98e012 100644
+--- a/VoldNativeService.cpp
++++ b/VoldNativeService.cpp
+@@ -140,6 +140,27 @@ status_t VoldNativeService::dump(int fd, const Vector<String16>& /* args */) {
+     return NO_ERROR;
+ }
+ 
++binder::Status VoldNativeService::checkNonCeStorageKeys(std::vector<std::string>* _aidl_return) {
++    ENFORCE_SYSTEM_OR_ROOT;
++
++    const char *dirs[] = {
++        "/data/misc/vold/user_keys/de/0",
++        "/data/unencrypted/key",
++        "/metadata/vold/metadata_encryption/key",
++    };
++
++    std::vector<std::string> res;
++
++    for (const char *dir : dirs) {
++        android::vold::KeyBuffer key_buffer;
++        if (android::vold::retrieveKey(dir, android::vold::kEmptyAuthentication, &key_buffer)) {
++            res.push_back(std::string(dir));
++        }
++    }
++    *_aidl_return = res;
++    return Ok();
++}
++
+ binder::Status VoldNativeService::setListener(
+         const android::sp<android::os::IVoldListener>& listener) {
+     ENFORCE_SYSTEM_OR_ROOT;
+diff --git a/VoldNativeService.h b/VoldNativeService.h
+index a5253c0..b4394e1 100644
+--- a/VoldNativeService.h
++++ b/VoldNativeService.h
+@@ -165,6 +165,8 @@ class VoldNativeService : public BinderService<VoldNativeService>, public os::Bn
+     binder::Status destroyDsuMetadataKey(const std::string& dsuSlot) override;
+ 
+     binder::Status getStorageSize(int64_t* storageSize) override;
++
++    binder::Status checkNonCeStorageKeys(std::vector<std::string>* _aidl_return) override;
+ };
+ 
+ }  // namespace vold
+diff --git a/binder/android/os/IVold.aidl b/binder/android/os/IVold.aidl
+index 810fdad..b5ab3aa 100644
+--- a/binder/android/os/IVold.aidl
++++ b/binder/android/os/IVold.aidl
+@@ -143,6 +143,8 @@ interface IVold {
+     // on failure.
+     int getStorageRemainingLifetime();
+ 
++    @utf8InCpp String[] checkNonCeStorageKeys();
++
+     const int FSTRIM_FLAG_DEEP_TRIM = 1;
+ 
+     const int MOUNT_FLAG_PRIMARY = 1;
+-- 
+2.43.0
+

@@ -1,0 +1,33 @@
+From cae91c78d9203dfc0600af270036d90b1e941d0b Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Fri, 16 Oct 2026 23:29:21 +0000
+Subject: [PATCH] AmbientDisplayConfiguration: hide doze-on-charge helper
+ methods (API lint)
+
+---
+ .../android/hardware/display/AmbientDisplayConfiguration.java   | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/core/java/android/hardware/display/AmbientDisplayConfiguration.java b/core/java/android/hardware/display/AmbientDisplayConfiguration.java
+index d42236716..b00e01313 100644
+--- a/core/java/android/hardware/display/AmbientDisplayConfiguration.java
++++ b/core/java/android/hardware/display/AmbientDisplayConfiguration.java
+@@ -239,6 +239,7 @@ public class AmbientDisplayConfiguration {
+         return alwaysOnEnabledSetting(user) || alwaysOnChargingEnabled(user);
+     }
+ 
++    /** @hide */
+     public boolean alwaysOnEnabledSetting(int user) {
+         final boolean alwaysOnEnabled = Settings.Secure.getIntForUser(
+                 mContext.getContentResolver(), Settings.Secure.DOZE_ALWAYS_ON,
+@@ -246,6 +247,7 @@ public class AmbientDisplayConfiguration {
+         return alwaysOnEnabled && alwaysOnAvailable() && !accessibilityInversionEnabled(user);
+     }
+ 
++    /** @hide */
+     public boolean alwaysOnChargingEnabledSetting(int user) {
+         return Settings.Secure.getIntForUser(mContext.getContentResolver(),
+             Settings.Secure.DOZE_ON_CHARGE, 0, user) == 1;
+-- 
+2.43.0
+

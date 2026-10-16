@@ -1,11 +1,9 @@
-From 0a78e602ac7c8d8a712db7c3652728294a722fc0 Mon Sep 17 00:00:00 2001
+From 7d4d22e6ad280341aa69d359d3cddf1cddc0b5e6 Mon Sep 17 00:00:00 2001
 From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
 Date: Sat, 1 Jun 2024 23:06:54 +0300
 Subject: [PATCH] add API for destroying system DE storage encryption key
 
-Ported from GrapheneOS platform_system_vold 2025061900 (fuzzed past LineageOS changes).
-
-Change-Id: I1ad6d13edf1cd0b2d0687055e232be140ad9b22b
+(applied with fuzz on AXP.OS; original: 9202-gos-add-api-for-destroying-system-de-storage-encryptio.patch)
 ---
  FsCrypt.cpp                  | 8 ++++++++
  FsCrypt.h                    | 1 +
@@ -46,10 +44,10 @@ index a1b2fba..e7e282c 100644
  
  std::vector<int> fscrypt_get_unlocked_users();
 diff --git a/VoldNativeService.cpp b/VoldNativeService.cpp
-index ddb6945..2fb8fb5 100644
+index 6c2614e..147b5df 100644
 --- a/VoldNativeService.cpp
 +++ b/VoldNativeService.cpp
-@@ -964,6 +964,13 @@ binder::Status VoldNativeService::destroyMetadataKey(const std::string& mountPoi
+@@ -985,6 +985,13 @@ binder::Status VoldNativeService::destroyMetadataKey(const std::string& mountPoi
      return translateBool(destroy_mountpoint_metadata_key(mountPointPath));
  }
  
@@ -64,7 +62,7 @@ index ddb6945..2fb8fb5 100644
      ENFORCE_SYSTEM_OR_ROOT;
      return translate(GetStorageSize(storageSize));
 diff --git a/VoldNativeService.h b/VoldNativeService.h
-index 95dd113..6975708 100644
+index 2c236c6..c2cce5a 100644
 --- a/VoldNativeService.h
 +++ b/VoldNativeService.h
 @@ -167,6 +167,7 @@ class VoldNativeService : public BinderService<VoldNativeService>, public os::Bn
@@ -72,11 +70,11 @@ index 95dd113..6975708 100644
      binder::Status getStorageSize(int64_t* storageSize) override;
      binder::Status destroyMetadataKey(const std::string& mountPointPath) override;
 +    binder::Status destroySystemStorageKey() override;
- };
  
- }  // namespace vold
+     binder::Status checkNonCeStorageKeys(std::vector<std::string>* _aidl_return) override;
+ };
 diff --git a/binder/android/os/IVold.aidl b/binder/android/os/IVold.aidl
-index bb40547..c9e74ea 100644
+index 1df181e..080c139 100644
 --- a/binder/android/os/IVold.aidl
 +++ b/binder/android/os/IVold.aidl
 @@ -137,6 +137,7 @@ interface IVold {

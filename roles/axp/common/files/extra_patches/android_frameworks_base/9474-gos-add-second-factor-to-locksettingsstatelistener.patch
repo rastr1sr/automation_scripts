@@ -1,0 +1,61 @@
+From 82d508fbb639324136a287dcf9f43a5df91d9a9a Mon Sep 17 00:00:00 2001
+From: Fred Underwood <underwoodfred@proton.me>
+Date: Sat, 21 Dec 2024 16:43:01 +1000
+Subject: [PATCH] add second factor to LockSettingsStateListener
+
+---
+ .../internal/widget/LockSettingsStateListener.java       | 6 ++++--
+ .../android/server/locksettings/LockSettingsService.java | 9 +++++----
+ 2 files changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/core/java/com/android/internal/widget/LockSettingsStateListener.java b/core/java/com/android/internal/widget/LockSettingsStateListener.java
+index 869e676f4..8b59f56f2 100644
+--- a/core/java/com/android/internal/widget/LockSettingsStateListener.java
++++ b/core/java/com/android/internal/widget/LockSettingsStateListener.java
+@@ -25,12 +25,14 @@ public interface LockSettingsStateListener {
+     /**
+      * Defines behavior in response to a successful authentication
+      * @param userId The user Id for the requested authentication
++     * @param lockDomain Whether primary or biometric second factor auth
+      */
+-    void onAuthenticationSucceeded(int userId);
++    void onAuthenticationSucceeded(int userId, LockDomain lockDomain);
+ 
+     /**
+      * Defines behavior in response to a failed authentication
+      * @param userId The user Id for the requested authentication
++     * @param lockDomain Whether primary or biometric second factor auth
+      */
+-    void onAuthenticationFailed(int userId);
++    void onAuthenticationFailed(int userId, LockDomain lockDomain);
+ }
+diff --git a/services/core/java/com/android/server/locksettings/LockSettingsService.java b/services/core/java/com/android/server/locksettings/LockSettingsService.java
+index 6c512f1d8..ae887a43f 100644
+--- a/services/core/java/com/android/server/locksettings/LockSettingsService.java
++++ b/services/core/java/com/android/server/locksettings/LockSettingsService.java
+@@ -2651,17 +2651,18 @@ public class LockSettingsService extends ILockSettings.Stub {
+         if (reportPrimaryAuthAttempts()) {
+             final boolean success =
+                     response.getResponseCode() == VerifyCredentialResponse.RESPONSE_OK;
+-            notifyLockSettingsStateListeners(success, userId);
++            notifyLockSettingsStateListeners(success, userId, lockDomain);
+         }
+         return response;
+     }
+ 
+-    private void notifyLockSettingsStateListeners(boolean success, int userId) {
++    private void notifyLockSettingsStateListeners(boolean success, int userId,
++            LockDomain lockDomain) {
+         for (LockSettingsStateListener listener : mLockSettingsStateListeners) {
+             if (success) {
+-                listener.onAuthenticationSucceeded(userId);
++                listener.onAuthenticationSucceeded(userId, lockDomain);
+             } else {
+-                listener.onAuthenticationFailed(userId);
++                listener.onAuthenticationFailed(userId, lockDomain);
+             }
+         }
+     }
+-- 
+2.43.0
+

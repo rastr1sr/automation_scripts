@@ -1,0 +1,119 @@
+From 1dc5ab2f33fece7e7aa6921e1283301d1bdfdb3e Mon Sep 17 00:00:00 2001
+From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
+Date: Wed, 26 Mar 2025 14:58:36 +0000
+Subject: [PATCH] Settings to toggle cross-profile shared clipboard behavior
+
+(applied with fuzz on AXP.OS; original: s2-1e79c5f6ff.patch)
+---
+ res/values/strings_ext.xml                    | 17 ++++++
+ res/xml/private_space_settings.xml            |  6 ++
+ ...PsCrossProfileClipboardAccessPrefCtrl.java | 55 +++++++++++++++++++
+ 3 files changed, 78 insertions(+)
+ create mode 100644 src/com/android/settings/privatespace/users/PsCrossProfileClipboardAccessPrefCtrl.java
+
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index d24da4a7..a0c26459 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -29,3 +29,20 @@
+         where strong authentication is required to unlock the storage.
+     </string>
+ 
++    <string name="cross_profile_clipboard_access_title">Cross-profile shared clipboard</string>
++    <string name="cross_profile_clipboard_access_allow_defaults_title">Follow defaults</string>
++    <string name="cross_profile_clipboard_access_allow_defaults_summary">Allow system defaults sharing the clipboard from and to the parent user and its other child profiles.</string>
++    <string name="cross_profile_clipboard_access_allow_import_defaults_title">Follow import defaults</string>
++    <string name="cross_profile_clipboard_access_allow_import_defaults_summary">Allow system defaults sharing the clipboard from the parent user and its other child profiles.</string>
++    <string name="cross_profile_clipboard_access_allow_export_defaults_title">Follow export defaults</string>
++    <string name="cross_profile_clipboard_access_allow_export_defaults_summary">Allow system defaults sharing the clipboard to the parent user and its other child profiles.</string>
++    <string name="cross_profile_clipboard_access_disallow_title">Disallowed</string>
++    <string name="cross_profile_clipboard_access_disallow_summary">Disallow sharing the clipboard from and to the parent user and its other child profiles.</string>
++    <string name="cross_profile_clipboard_access_footer">This setting provides an option for users
++        to allow or disallow sharing clipboard to and from other profiles of the same parent user including itself.
++        Once disallowed, future clipboard content updates between user profiles of the same parent user,
++        such as between private space profile and parent user, or between private space profile and work profile,
++        will not be accessible. Clipboard contents shared with other profiles prior to selecting a
++        stricter option remain accessible until clipboard contents have been updated.
++    </string>
++
+diff --git a/res/xml/private_space_settings.xml b/res/xml/private_space_settings.xml
+index e6871f8e..924a1d2d 100644
+--- a/res/xml/private_space_settings.xml
++++ b/res/xml/private_space_settings.xml
+@@ -68,6 +68,12 @@
+             settings:controller="com.android.settings.privatespace.users.PsDisallowDelayedLockingPrefController"
+             settings:searchable="false" />
+ 
++        <Preference
++            android:key="private_space_cross_profile_clipboard_access_title"
++            android:title="@string/cross_profile_clipboard_access_title"
++            settings:controller="com.android.settings.privatespace.users.PsCrossProfileClipboardAccessPrefCtrl"
++            settings:searchable="false" />
++
+         <Preference
+             android:key="private_space_delete"
+             android:title="@string/private_space_delete_title"
+diff --git a/src/com/android/settings/privatespace/users/PsCrossProfileClipboardAccessPrefCtrl.java b/src/com/android/settings/privatespace/users/PsCrossProfileClipboardAccessPrefCtrl.java
+new file mode 100644
+index 00000000..666cecf4
+--- /dev/null
++++ b/src/com/android/settings/privatespace/users/PsCrossProfileClipboardAccessPrefCtrl.java
+@@ -0,0 +1,55 @@
++package com.android.settings.privatespace.users;
++
++import android.content.Context;
++import android.ext.settings.IntSetting;
++
++import androidx.preference.PreferenceScreen;
++
++import com.android.settings.R;
++import com.android.settings.ext.IntSettingPrefController;
++import com.android.settings.ext.RadioButtonPickerFragment2;
++import com.android.settings.privatespace.PrivateSpaceMaintainer;
++
++import static android.ext.settings.CrossProfileClipboardAccessSettings.*;
++
++public class PsCrossProfileClipboardAccessPrefCtrl extends IntSettingPrefController {
++
++
++    public PsCrossProfileClipboardAccessPrefCtrl(Context ctx, String key) {
++        super(ctx, key, CROSS_PROFILE_CLIPBOARD_ACCESS_SETTINGS,
++                PrivateSpaceMaintainer.getInstance(ctx).getPrivateProfileHandle());
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        int r = super.getAvailabilityStatus();
++        if (r == AVAILABLE) {
++            boolean hasPrivateProfile =
++                    PrivateSpaceMaintainer.getInstance(mContext).getPrivateProfileHandle() != null;
++            return hasPrivateProfile ? AVAILABLE : DISABLED_FOR_USER;
++        }
++
++        return r;
++    }
++
++    @Override
++    protected void getEntries(Entries entries) {
++        entries.add(R.string.cross_profile_clipboard_access_allow_defaults_title,
++                R.string.cross_profile_clipboard_access_allow_defaults_summary,
++                FOLLOW_DEFAULT);
++        entries.add(R.string.cross_profile_clipboard_access_allow_import_defaults_title,
++                R.string.cross_profile_clipboard_access_allow_import_defaults_summary,
++                ALLOW_IMPORT_DEFAULTS_ONLY);
++        entries.add(R.string.cross_profile_clipboard_access_allow_export_defaults_title,
++                R.string.cross_profile_clipboard_access_allow_export_defaults_summary,
++                ALLOW_EXPORT_DEFAULTS_ONLY);
++        entries.add(R.string.cross_profile_clipboard_access_disallow_title,
++                R.string.cross_profile_clipboard_access_disallow_summary,
++                BLOCK);
++    }
++
++    @Override
++    public void addPrefsBeforeList(RadioButtonPickerFragment2 fragment, PreferenceScreen screen) {
++        addFooterPreference(screen, R.string.cross_profile_clipboard_access_footer);
++    }
++}
+-- 
+2.43.0
+

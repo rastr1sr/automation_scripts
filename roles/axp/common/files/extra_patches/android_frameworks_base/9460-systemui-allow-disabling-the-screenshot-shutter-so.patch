@@ -1,0 +1,49 @@
+From d8aa1156c5886e02f65ba9acd7151931b89a2dc9 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Fri, 16 Oct 2026 02:20:31 +0000
+Subject: [PATCH] SystemUI: allow disabling the screenshot shutter sound
+
+Settings.System.screenshot_shutter_sound (default on); ignored where config_camera_sound_forced is set. Idea from AOSPA.
+---
+ .../systemui/screenshot/ScreenshotSoundController.kt  | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/screenshot/ScreenshotSoundController.kt b/packages/SystemUI/src/com/android/systemui/screenshot/ScreenshotSoundController.kt
+index f243c2711..86de46009 100644
+--- a/packages/SystemUI/src/com/android/systemui/screenshot/ScreenshotSoundController.kt
++++ b/packages/SystemUI/src/com/android/systemui/screenshot/ScreenshotSoundController.kt
+@@ -16,6 +16,9 @@
+ 
+ package com.android.systemui.screenshot
+ 
++import android.content.ContentResolver
++import android.content.res.Resources
++import android.provider.Settings
+ import android.media.MediaPlayer
+ import android.util.Log
+ import com.android.app.tracing.coroutines.asyncTraced as async
+@@ -55,6 +58,7 @@ class ScreenshotSoundControllerImpl
+ @Inject
+ constructor(
+     private val soundProvider: ScreenshotSoundProvider,
++    private val contentResolver: ContentResolver,
+     @Application private val coroutineScope: CoroutineScope,
+     @Background private val bgDispatcher: CoroutineDispatcher
+ ) : ScreenshotSoundController {
+@@ -71,6 +75,13 @@ constructor(
+ 
+     override suspend fun playScreenshotSound() {
+         withContext(bgDispatcher) {
++            // AXP fork: honour the screenshot sound toggle, except where the shutter sound is
++            // legally required (config_camera_sound_forced)
++            val forced = Resources.getSystem().getBoolean(
++                    com.android.internal.R.bool.config_camera_sound_forced)
++            if (!forced && Settings.System.getInt(contentResolver, "screenshot_shutter_sound", 1) == 0) {
++                return@withContext
++            }
+             try {
+                 player.await()?.start()
+             } catch (e: IllegalStateException) {
+-- 
+2.43.0
+

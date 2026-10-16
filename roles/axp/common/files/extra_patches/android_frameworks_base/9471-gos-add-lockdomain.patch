@@ -1,0 +1,71 @@
+From d48688e3ae69cec2e44bf05c23da122c25dbdb62 Mon Sep 17 00:00:00 2001
+From: Fred Underwood <underwoodfred@proton.me>
+Date: Sat, 21 Dec 2024 16:24:26 +1000
+Subject: [PATCH] add LockDomain
+
+---
+ .../android/internal/widget/LockDomain.aidl   |  3 ++
+ .../android/internal/widget/LockDomain.java   | 40 +++++++++++++++++++
+ 2 files changed, 43 insertions(+)
+ create mode 100644 core/java/com/android/internal/widget/LockDomain.aidl
+ create mode 100644 core/java/com/android/internal/widget/LockDomain.java
+
+diff --git a/core/java/com/android/internal/widget/LockDomain.aidl b/core/java/com/android/internal/widget/LockDomain.aidl
+new file mode 100644
+index 000000000..6ee4d5913
+--- /dev/null
++++ b/core/java/com/android/internal/widget/LockDomain.aidl
+@@ -0,0 +1,3 @@
++package com.android.internal.widget;
++
++parcelable LockDomain;
+diff --git a/core/java/com/android/internal/widget/LockDomain.java b/core/java/com/android/internal/widget/LockDomain.java
+new file mode 100644
+index 000000000..46f7e9f02
+--- /dev/null
++++ b/core/java/com/android/internal/widget/LockDomain.java
+@@ -0,0 +1,40 @@
++package com.android.internal.widget;
++
++import android.os.Parcel;
++import android.os.Parcelable;
++
++/**
++ * Using this type as an argument for methods that require secondary handling is safer and more
++ * future proof given that we rebase on top of upstream.
++ *
++ * Consider that if we add secondary handling to a method by overloading with a boolean
++ * isPrimary, then upstream could add a conflicting overload.
++ *
++ * Also consider that if we have foo(boolean) and its overload foo(boolean, boolean), adding an
++ * additional boolean argument, isPrimary, to both could result in future callers silently calling
++ * the wrong method.
++ */
++public enum LockDomain implements Parcelable {
++    Primary, Secondary;
++
++    @Override
++    public int describeContents() {
++        return 0;
++    }
++
++    @Override
++    public void writeToParcel(@androidx.annotation.NonNull Parcel dest, int flags) {
++        dest.writeInt(ordinal());
++    }
++
++    public static final Parcelable.Creator<LockDomain> CREATOR
++            = new Parcelable.Creator<>() {
++        public LockDomain createFromParcel(Parcel in) {
++            return LockDomain.values()[in.readInt()];
++        }
++
++        public LockDomain[] newArray(int size) {
++            return new LockDomain[size];
++        }
++    };
++}
+\ No newline at end of file
+-- 
+2.43.0
+

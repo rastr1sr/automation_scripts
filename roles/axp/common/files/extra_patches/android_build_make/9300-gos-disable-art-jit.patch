@@ -1,0 +1,25 @@
+From 027149cef45f522d9e4fc9e07cc2ac8233b301c6 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Sun, 28 Aug 2016 14:14:10 -0400
+Subject: [PATCH] disable ART JIT
+
+---
+ target/product/runtime_libart.mk | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/target/product/runtime_libart.mk b/target/product/runtime_libart.mk
+index 9e8afa8..0ff38f7 100644
+--- a/target/product/runtime_libart.mk
++++ b/target/product/runtime_libart.mk
+@@ -94,7 +94,7 @@ endif
+ #
+ # The thermal cutoff value is currently set to THERMAL_STATUS_MODERATE.
+ PRODUCT_SYSTEM_PROPERTIES += \
+-    dalvik.vm.usejit=true \
++    dalvik.vm.usejit=false \
+     dalvik.vm.dexopt.secondary=true \
+     dalvik.vm.dexopt.thermal-cutoff=2 \
+     dalvik.vm.appimageformat=lz4
+-- 
+2.43.0
+

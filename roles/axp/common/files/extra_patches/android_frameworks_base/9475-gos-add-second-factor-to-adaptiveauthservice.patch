@@ -1,0 +1,337 @@
+From 9bd666fe7b85b029d3695748b5ae81f1ebe01f47 Mon Sep 17 00:00:00 2001
+From: Fred Underwood <underwoodfred@proton.me>
+Date: Sat, 21 Dec 2024 16:43:33 +1000
+Subject: [PATCH] add second factor to AdaptiveAuthService
+
+---
+ .../AuthenticationPolicyService.java          | 48 ++++++++---
+ .../AuthenticationPolicyServiceTest.java      | 81 +++++++++++++++----
+ 2 files changed, 103 insertions(+), 26 deletions(-)
+
+diff --git a/services/core/java/com/android/server/security/authenticationpolicy/AuthenticationPolicyService.java b/services/core/java/com/android/server/security/authenticationpolicy/AuthenticationPolicyService.java
+index 6798a6146..31a631b87 100644
+--- a/services/core/java/com/android/server/security/authenticationpolicy/AuthenticationPolicyService.java
++++ b/services/core/java/com/android/server/security/authenticationpolicy/AuthenticationPolicyService.java
+@@ -18,6 +18,7 @@ package com.android.server.security.authenticationpolicy;
+ 
+ import static android.Manifest.permission.MANAGE_SECURE_LOCK_DEVICE;
+ 
++import static com.android.internal.widget.LockDomain.Primary;
+ import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.SOME_AUTH_REQUIRED_AFTER_ADAPTIVE_AUTH_REQUEST;
+ 
+ import android.annotation.EnforcePermission;
+@@ -50,6 +51,7 @@ import android.util.SparseLongArray;
+ 
+ import com.android.internal.annotations.VisibleForTesting;
+ import com.android.internal.util.FrameworkStatsLog;
++import com.android.internal.widget.LockDomain;
+ import com.android.internal.widget.LockPatternUtils;
+ import com.android.internal.widget.LockSettingsInternal;
+ import com.android.internal.widget.LockSettingsStateListener;
+@@ -71,10 +73,12 @@ public class AuthenticationPolicyService extends SystemService {
+     static final int MAX_ALLOWED_FAILED_AUTH_ATTEMPTS = 5;
+     private static final int MSG_REPORT_PRIMARY_AUTH_ATTEMPT = 1;
+     private static final int MSG_REPORT_BIOMETRIC_AUTH_ATTEMPT = 2;
++    private static final int MSG_REPORT_BIOMETRIC_SECOND_FACTOR_AUTH_ATTEMPT = 3;
+     private static final int AUTH_SUCCESS = 1;
+     private static final int AUTH_FAILURE = 0;
+     private static final int TYPE_PRIMARY_AUTH = 0;
+     private static final int TYPE_BIOMETRIC_AUTH = 1;
++    private static final int TYPE_BIOMETRIC_SECOND_FACTOR_AUTH = 3;
+ 
+     private final LockPatternUtils mLockPatternUtils;
+     private final LockSettingsInternal mLockSettings;
+@@ -130,19 +134,21 @@ public class AuthenticationPolicyService extends SystemService {
+     private final LockSettingsStateListener mLockSettingsStateListener =
+             new LockSettingsStateListener() {
+                 @Override
+-                public void onAuthenticationSucceeded(int userId) {
++                public void onAuthenticationSucceeded(int userId, LockDomain lockDomain) {
+                     if (DEBUG) {
+-                        Slog.d(TAG, "LockSettingsStateListener#onAuthenticationSucceeded");
++                        Slog.d(TAG, "LockSettingsStateListener#onAuthenticationSucceeded, domain: " + lockDomain);
+                     }
+-                    mHandler.obtainMessage(MSG_REPORT_PRIMARY_AUTH_ATTEMPT, AUTH_SUCCESS, userId)
+-                            .sendToTarget();
++                    mHandler.obtainMessage(lockDomain == Primary ? MSG_REPORT_PRIMARY_AUTH_ATTEMPT :
++                                    MSG_REPORT_BIOMETRIC_SECOND_FACTOR_AUTH_ATTEMPT, AUTH_SUCCESS,
++                                    userId).sendToTarget();
+                 }
+ 
+                 @Override
+-                public void onAuthenticationFailed(int userId) {
+-                    Slog.i(TAG, "LockSettingsStateListener#onAuthenticationFailed");
+-                    mHandler.obtainMessage(MSG_REPORT_PRIMARY_AUTH_ATTEMPT, AUTH_FAILURE, userId)
+-                            .sendToTarget();
++                public void onAuthenticationFailed(int userId, LockDomain lockDomain) {
++                    Slog.i(TAG, "LockSettingsStateListener#onAuthenticationFailed, domain: " + lockDomain);
++                    mHandler.obtainMessage(lockDomain == Primary ? MSG_REPORT_PRIMARY_AUTH_ATTEMPT :
++                                    MSG_REPORT_BIOMETRIC_SECOND_FACTOR_AUTH_ATTEMPT, AUTH_FAILURE,
++                                    userId).sendToTarget();
+                 }
+             };
+ 
+@@ -190,6 +196,10 @@ public class AuthenticationPolicyService extends SystemService {
+                 case MSG_REPORT_BIOMETRIC_AUTH_ATTEMPT:
+                     handleReportBiometricAuthAttempt(msg.arg1 != AUTH_FAILURE, msg.arg2);
+                     break;
++                case MSG_REPORT_BIOMETRIC_SECOND_FACTOR_AUTH_ATTEMPT:
++                    handleReportBiometricSecondFactorAuthAttempt(msg.arg1 != AUTH_FAILURE,
++                            msg.arg2);
++                    break;
+             }
+         }
+     };
+@@ -210,12 +220,32 @@ public class AuthenticationPolicyService extends SystemService {
+         reportAuthAttempt(TYPE_BIOMETRIC_AUTH, success, userId);
+     }
+ 
++    private void handleReportBiometricSecondFactorAuthAttempt(boolean success, int userId) {
++        if (DEBUG) {
++            Slog.d(TAG, "handleReportBiometricSecondFactorAuthAttempt: success=" + success
++                    + ", userId=" + userId);
++        }
++        reportAuthAttempt(TYPE_BIOMETRIC_SECOND_FACTOR_AUTH, success, userId);
++    }
++
+     private void reportAuthAttempt(int authType, boolean success, int userId) {
+         // Disable adaptive auth for automotive devices by default
+         if (getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) {
+             return;
+         }
+ 
++        boolean isDeviceLockedForUser = mKeyguardManager.isDeviceLocked(userId)
++                && mKeyguardManager.isKeyguardLocked();
++        // If there's a biometric second factor and we're on the lockscreen then don't count
++        // biometric as success. Second factor is not used for BiometricPrompt so do count as
++        // success when not on lockscreen.
++        if (authType == TYPE_BIOMETRIC_AUTH
++                && success
++                && isDeviceLockedForUser
++                && mLockPatternUtils.isBiometricSecondFactorEnabled(userId)) {
++            return;
++        }
++
+         if (success) {
+             // Deleting the entry effectively resets the counter of failed attempts for the user
+             mFailedAttemptsForUser.delete(userId);
+@@ -240,7 +270,7 @@ public class AuthenticationPolicyService extends SystemService {
+ 
+         // Don't lock again if the device is already locked and if Keyguard is already showing and
+         // isn't trivially dismissible
+-        if (mKeyguardManager.isDeviceLocked(userId) && mKeyguardManager.isKeyguardLocked()) {
++        if (isDeviceLockedForUser) {
+             Slog.d(TAG, "Not locking the device because the device is already locked.");
+             return;
+         }
+diff --git a/services/tests/servicestests/src/com/android/server/security/authenticationpolicy/AuthenticationPolicyServiceTest.java b/services/tests/servicestests/src/com/android/server/security/authenticationpolicy/AuthenticationPolicyServiceTest.java
+index ee8eb9b35..d21f3bf4e 100644
+--- a/services/tests/servicestests/src/com/android/server/security/authenticationpolicy/AuthenticationPolicyServiceTest.java
++++ b/services/tests/servicestests/src/com/android/server/security/authenticationpolicy/AuthenticationPolicyServiceTest.java
+@@ -21,6 +21,7 @@ import static android.adaptiveauth.Flags.FLAG_REPORT_BIOMETRIC_AUTH_ATTEMPTS;
+ import static android.security.Flags.FLAG_REPORT_PRIMARY_AUTH_ATTEMPTS;
+ import static android.security.authenticationpolicy.AuthenticationPolicyManager.ERROR_UNSUPPORTED;
+ 
++import static com.android.internal.widget.LockDomain.Primary;
+ import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.SOME_AUTH_REQUIRED_AFTER_ADAPTIVE_AUTH_REQUEST;
+ import static com.android.server.security.authenticationpolicy.AuthenticationPolicyService.MAX_ALLOWED_FAILED_AUTH_ATTEMPTS;
+ 
+@@ -48,8 +49,8 @@ import android.platform.test.flag.junit.SetFlagsRule;
+ import androidx.test.InstrumentationRegistry;
+ import androidx.test.core.app.ApplicationProvider;
+ import androidx.test.filters.SmallTest;
+-import androidx.test.runner.AndroidJUnit4;
+ 
++import com.android.internal.widget.LockDomain;
+ import com.android.internal.widget.LockPatternUtils;
+ import com.android.internal.widget.LockSettingsInternal;
+ import com.android.internal.widget.LockSettingsStateListener;
+@@ -67,12 +68,15 @@ import org.mockito.Captor;
+ import org.mockito.Mock;
+ import org.mockito.MockitoAnnotations;
+ 
++import junitparams.JUnitParamsRunner;
++import junitparams.Parameters;
++
+ /**
+  * atest FrameworksServicesTests:AuthenticationPolicyServiceTest
+  */
+ @Presubmit
+ @SmallTest
+-@RunWith(AndroidJUnit4.class)
++@RunWith(JUnitParamsRunner.class)
+ public class AuthenticationPolicyServiceTest {
+     @Rule
+     public final SetFlagsRule mSetFlagsRule = new SetFlagsRule();
+@@ -137,6 +141,8 @@ public class AuthenticationPolicyServiceTest {
+                 mContext, mLockPatternUtils);
+         mAuthenticationPolicyService.init();
+ 
++        when(mLockPatternUtils.isBiometricSecondFactorEnabled(PRIMARY_USER_ID)).thenReturn(false);
++
+         verify(mLockSettings).registerLockSettingsStateListener(
+                 mLockSettingsStateListenerCaptor.capture());
+         verify(mBiometricManager).registerAuthenticationStateListener(
+@@ -164,9 +170,11 @@ public class AuthenticationPolicyServiceTest {
+     }
+ 
+     @Test
+-    public void testReportAuthAttempt_primaryAuthSucceeded()
++    @Parameters({ "Primary", "Secondary" })
++    public void testReportAuthAttempt_primaryAuthSucceeded(LockDomain lockDomain)
+             throws RemoteException {
+-        mLockSettingsStateListenerCaptor.getValue().onAuthenticationSucceeded(PRIMARY_USER_ID);
++        mLockSettingsStateListenerCaptor.getValue().onAuthenticationSucceeded(PRIMARY_USER_ID,
++                lockDomain);
+         waitForAuthCompletion();
+ 
+         verifyNotLockDevice(DEFAULT_COUNT_FAILED_AUTH_ATTEMPTS /* expectedCntFailedAttempts */,
+@@ -174,23 +182,28 @@ public class AuthenticationPolicyServiceTest {
+     }
+ 
+     @Test
+-    public void testReportAuthAttempt_primaryAuthFailed_once()
++    @Parameters({ "Primary", "Secondary" })
++    public void testReportAuthAttempt_primaryAuthFailed_once(LockDomain lockDomain)
+             throws RemoteException {
+-        mLockSettingsStateListenerCaptor.getValue().onAuthenticationFailed(PRIMARY_USER_ID);
++        mLockSettingsStateListenerCaptor.getValue().onAuthenticationFailed(PRIMARY_USER_ID,
++                lockDomain);
+         waitForAuthCompletion();
+ 
+         verifyNotLockDevice(1 /* expectedCntFailedAttempts */, PRIMARY_USER_ID);
+     }
+ 
+     @Test
+-    public void testReportAuthAttempt_primaryAuthFailed_multiple_deviceCurrentlyLocked()
++    @Parameters({ "Primary", "Secondary" })
++    public void testReportAuthAttempt_primaryAuthFailed_multiple_deviceCurrentlyLocked(
++            LockDomain lockDomain)
+             throws RemoteException {
+         // Device is currently locked and Keyguard is showing
+         when(mKeyguardManager.isDeviceLocked(PRIMARY_USER_ID)).thenReturn(true);
+         when(mKeyguardManager.isKeyguardLocked()).thenReturn(true);
+ 
+         for (int i = 0; i < MAX_ALLOWED_FAILED_AUTH_ATTEMPTS; i++) {
+-            mLockSettingsStateListenerCaptor.getValue().onAuthenticationFailed(PRIMARY_USER_ID);
++            mLockSettingsStateListenerCaptor.getValue().onAuthenticationFailed(PRIMARY_USER_ID,
++                    lockDomain);
+         }
+         waitForAuthCompletion();
+ 
+@@ -199,14 +212,17 @@ public class AuthenticationPolicyServiceTest {
+     }
+ 
+     @Test
+-    public void testReportAuthAttempt_primaryAuthFailed_multiple_deviceCurrentlyNotLocked()
++    @Parameters({ "Primary", "Secondary" })
++    public void testReportAuthAttempt_primaryAuthFailed_multiple_deviceCurrentlyNotLocked(
++            LockDomain lockDomain)
+             throws RemoteException {
+         // Device is currently not locked and Keyguard is not showing
+         when(mKeyguardManager.isDeviceLocked(PRIMARY_USER_ID)).thenReturn(false);
+         when(mKeyguardManager.isKeyguardLocked()).thenReturn(false);
+ 
+         for (int i = 0; i < MAX_ALLOWED_FAILED_AUTH_ATTEMPTS; i++) {
+-            mLockSettingsStateListenerCaptor.getValue().onAuthenticationFailed(PRIMARY_USER_ID);
++            mLockSettingsStateListenerCaptor.getValue().onAuthenticationFailed(PRIMARY_USER_ID,
++                    lockDomain);
+         }
+         waitForAuthCompletion();
+ 
+@@ -234,6 +250,27 @@ public class AuthenticationPolicyServiceTest {
+         verifyNotLockDevice(1 /* expectedCntFailedAttempts */, PRIMARY_USER_ID);
+     }
+ 
++    @Test
++    public void testReportAuthAttempt_biometricAuthWithSecondFactorEnabled_doesNotResetCounter()
++            throws RemoteException {
++        when(mLockPatternUtils.isBiometricSecondFactorEnabled(PRIMARY_USER_ID)).thenReturn(true);
++        // Device is currently locked and Keyguard is showing
++        when(mKeyguardManager.isDeviceLocked(PRIMARY_USER_ID)).thenReturn(true);
++        when(mKeyguardManager.isKeyguardLocked()).thenReturn(true);
++
++        mAuthenticationStateListenerCaptor.getValue().onAuthenticationFailed(
++                authFailedInfo(PRIMARY_USER_ID));
++        waitForAuthCompletion();
++
++        verifyNotLockDevice(1 /* expectedCntFailedAttempts */, PRIMARY_USER_ID);
++
++        mAuthenticationStateListenerCaptor.getValue().onAuthenticationSucceeded(
++                authSuccessInfo(PRIMARY_USER_ID));
++        waitForAuthCompletion();
++
++        verifyNotLockDevice(1 /* expectedCntFailedAttempts */, PRIMARY_USER_ID);
++    }
++
+     @Test
+     public void testReportAuthAttempt_biometricAuthFailed_multiple_deviceCurrentlyLocked()
+             throws RemoteException {
+@@ -268,7 +305,9 @@ public class AuthenticationPolicyServiceTest {
+     }
+ 
+     @Test
+-    public void testReportAuthAttempt_biometricAuthFailedThenPrimaryAuthSucceeded()
++    @Parameters({ "Primary", "Secondary" })
++    public void testReportAuthAttempt_biometricAuthFailedThenPrimaryAuthSucceeded(
++            LockDomain lockDomain)
+             throws RemoteException {
+         // Three failed biometric auth attempts
+         for (int i = 0; i < 3; i++) {
+@@ -276,7 +315,8 @@ public class AuthenticationPolicyServiceTest {
+                     authFailedInfo(PRIMARY_USER_ID));
+         }
+         // One successful primary auth attempt
+-        mLockSettingsStateListenerCaptor.getValue().onAuthenticationSucceeded(PRIMARY_USER_ID);
++        mLockSettingsStateListenerCaptor.getValue().onAuthenticationSucceeded(PRIMARY_USER_ID,
++                lockDomain);
+         waitForAuthCompletion();
+ 
+         verifyNotLockDevice(DEFAULT_COUNT_FAILED_AUTH_ATTEMPTS /* expectedCntFailedAttempts */,
+@@ -284,11 +324,14 @@ public class AuthenticationPolicyServiceTest {
+     }
+ 
+     @Test
+-    public void testReportAuthAttempt_primaryAuthFailedThenBiometricAuthSucceeded()
++    @Parameters({ "Primary", "Secondary" })
++    public void testReportAuthAttempt_primaryAuthFailedThenBiometricAuthSucceeded(
++            LockDomain lockDomain)
+             throws RemoteException {
+         // Three failed primary auth attempts
+         for (int i = 0; i < 3; i++) {
+-            mLockSettingsStateListenerCaptor.getValue().onAuthenticationFailed(PRIMARY_USER_ID);
++            mLockSettingsStateListenerCaptor.getValue().onAuthenticationFailed(PRIMARY_USER_ID,
++                    lockDomain);
+         }
+         // One successful biometric auth attempt
+         mAuthenticationStateListenerCaptor.getValue().onAuthenticationSucceeded(
+@@ -300,11 +343,14 @@ public class AuthenticationPolicyServiceTest {
+     }
+ 
+     @Test
+-    public void testReportAuthAttempt_primaryAuthAndBiometricAuthFailed_primaryUser()
++    @Parameters({ "Primary", "Secondary" })
++    public void testReportAuthAttempt_primaryAuthAndBiometricAuthFailed_primaryUser(
++            LockDomain lockDomain)
+             throws RemoteException {
+         // Three failed primary auth attempts
+         for (int i = 0; i < 3; i++) {
+-            mLockSettingsStateListenerCaptor.getValue().onAuthenticationFailed(PRIMARY_USER_ID);
++            mLockSettingsStateListenerCaptor.getValue().onAuthenticationFailed(PRIMARY_USER_ID,
++                    lockDomain);
+         }
+         // Two failed biometric auth attempts
+         for (int i = 0; i < 2; i++) {
+@@ -322,7 +368,8 @@ public class AuthenticationPolicyServiceTest {
+         // Three failed primary auth attempts
+         for (int i = 0; i < 3; i++) {
+             mLockSettingsStateListenerCaptor.getValue()
+-                    .onAuthenticationFailed(MANAGED_PROFILE_USER_ID);
++                    .onAuthenticationFailed(MANAGED_PROFILE_USER_ID,
++                            Primary);
+         }
+         // Two failed biometric auth attempts
+         for (int i = 0; i < 2; i++) {
+-- 
+2.43.0
+

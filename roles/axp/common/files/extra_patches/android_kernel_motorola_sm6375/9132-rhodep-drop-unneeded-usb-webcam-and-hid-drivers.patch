@@ -1,0 +1,34 @@
+From 33a1679c680031c3b7eefd43fcd3c84a4dfc7532 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Fri, 16 Oct 2026 02:11:46 +0000
+Subject: [PATCH] rhodep: drop unneeded USB webcam and HID drivers (attack
+ surface)
+
+---
+ .../vendor/ext_config/moto-holi-rhodep.config       | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/arch/arm64/configs/vendor/ext_config/moto-holi-rhodep.config b/arch/arm64/configs/vendor/ext_config/moto-holi-rhodep.config
+index 84a684d34..9d579f351 100644
+--- a/arch/arm64/configs/vendor/ext_config/moto-holi-rhodep.config
++++ b/arch/arm64/configs/vendor/ext_config/moto-holi-rhodep.config
+@@ -88,3 +88,16 @@ CONFIG_BOARD_USES_DOUBLE_TAP_CTRL=y
+ 
+ # Vibrator
+ CONFIG_LDO_VIBRATOR_MMI=m
++
++# AXP fork: attack-surface reduction. Forensic USB exploit chains emulate obscure USB devices
++# (e.g. webcams, CVE-2024-53104) against a locked phone; the phone has no use for these drivers.
++# USB audio and common game controllers are kept.
++# CONFIG_USB_VIDEO_CLASS is not set
++# CONFIG_HID_PICOLCD is not set
++# CONFIG_HID_ROCCAT is not set
++# CONFIG_HID_PRODIKEYS is not set
++# CONFIG_HID_BETOP_FF is not set
++# CONFIG_HID_ELECOM is not set
++# CONFIG_HID_UCLOGIC is not set
++# CONFIG_HID_WACOM is not set
++# CONFIG_HID_WIIMOTE is not set
+-- 
+2.43.0
+

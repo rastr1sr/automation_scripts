@@ -1,0 +1,68 @@
+From f6cdde93ce28dd6b709ca5812e4175a193c8aea4 Mon Sep 17 00:00:00 2001
+From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
+Date: Tue, 25 Mar 2025 13:49:37 +0000
+Subject: [PATCH] Settings definition for cross profile clipboard access
+
+(applied with fuzz on AXP.OS; original: f6-b4a5f05e7bba.patch)
+---
+ .../CrossProfileClipboardAccessSettings.java  | 32 +++++++++++++++++++
+ core/java/android/provider/Settings.java      |  4 +++
+ 2 files changed, 36 insertions(+)
+ create mode 100644 core/java/android/ext/settings/CrossProfileClipboardAccessSettings.java
+
+diff --git a/core/java/android/ext/settings/CrossProfileClipboardAccessSettings.java b/core/java/android/ext/settings/CrossProfileClipboardAccessSettings.java
+new file mode 100644
+index 000000000..5e70abf06
+--- /dev/null
++++ b/core/java/android/ext/settings/CrossProfileClipboardAccessSettings.java
+@@ -0,0 +1,32 @@
++package android.ext.settings;
++
++import android.annotation.NonNull;
++import android.content.Context;
++import android.provider.Settings;
++
++/** @hide */
++public class CrossProfileClipboardAccessSettings {
++
++    public static final int FOLLOW_DEFAULT = 0;
++    public static final int ALLOW_IMPORT_DEFAULTS_ONLY = 1;
++    public static final int ALLOW_EXPORT_DEFAULTS_ONLY = 2;
++    public static final int BLOCK = 3;
++
++    public static final IntSetting CROSS_PROFILE_CLIPBOARD_ACCESS_SETTINGS = new IntSetting(
++            Setting.Scope.PER_USER, Settings.Secure.CROSS_PROFILE_CLIPBOARD_ACCESS,
++            // default
++            FOLLOW_DEFAULT,
++            // valid values
++            FOLLOW_DEFAULT, ALLOW_IMPORT_DEFAULTS_ONLY, ALLOW_EXPORT_DEFAULTS_ONLY, BLOCK
++    );
++
++    public static boolean isExportAccessAllowed(@NonNull Context ctx, int userId) {
++        int curSetting = CROSS_PROFILE_CLIPBOARD_ACCESS_SETTINGS.get(ctx, userId);
++        return curSetting == FOLLOW_DEFAULT || curSetting == ALLOW_EXPORT_DEFAULTS_ONLY;
++    }
++
++    public static boolean isImportAccessAllowed(@NonNull Context ctx, int userId) {
++        int curSetting = CROSS_PROFILE_CLIPBOARD_ACCESS_SETTINGS.get(ctx, userId);
++        return curSetting == FOLLOW_DEFAULT || curSetting == ALLOW_IMPORT_DEFAULTS_ONLY;
++    }
++}
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 2dda493ec..1e0d0e4bb 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -6974,6 +6974,10 @@ public final class Settings {
+         //@Protected(readWrite = KnownSystemPackage.SETTINGS)
+         public static final String AUTO_GRANT_OTHER_SENSORS_PERMISSION = "auto_grant_OTHER_SENSORS_perm";
+ 
++        /** @hide */
++        @Protected(readWrite = KnownSystemPackage.SETTINGS)
++        public static final String CROSS_PROFILE_CLIPBOARD_ACCESS = "cross_profile_clipboard_access";
++
+         // ExtSettings END
+ 
+         // NOTE: If you add new settings here, be sure to add them to
+-- 
+2.43.0
+

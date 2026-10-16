@@ -1,0 +1,145 @@
+From 4d35f9cf1a13c04aae7e70a507b6c1c1faea50d6 Mon Sep 17 00:00:00 2001
+From: darkobas <darkobas@gmail.com>
+Date: Mon, 7 Oct 2019 20:31:48 +0200
+Subject: [PATCH] base: Add Doze-on-charge customization [1/2]
+
+(applied with fuzz on AXP.OS; original: crd_doze_charge.patch)
+---
+ .../display/AmbientDisplayConfiguration.java  | 34 ++++++++++++++++---
+ core/java/android/provider/Settings.java      |  6 ++++
+ .../statusbar/phone/DozeParameters.java       |  5 +--
+ .../server/power/PowerManagerService.java     |  4 ++-
+ 4 files changed, 40 insertions(+), 9 deletions(-)
+
+diff --git a/core/java/android/hardware/display/AmbientDisplayConfiguration.java b/core/java/android/hardware/display/AmbientDisplayConfiguration.java
+index 7361d4f6b..d42236716 100644
+--- a/core/java/android/hardware/display/AmbientDisplayConfiguration.java
++++ b/core/java/android/hardware/display/AmbientDisplayConfiguration.java
+@@ -20,7 +20,10 @@ import static android.provider.Settings.Secure.SCREEN_OFF_UNLOCK_UDFPS_ENABLED;
+ 
+ import android.annotation.TestApi;
+ import android.content.Context;
++import android.content.Intent;
++import android.content.IntentFilter;
+ import android.hardware.biometrics.Flags;
++import android.os.BatteryManager;
+ import android.os.Build;
+ import android.os.SystemProperties;
+ import android.provider.Settings;
+@@ -40,7 +43,8 @@ import java.util.Map;
+  */
+ @TestApi
+ public class AmbientDisplayConfiguration {
+-    private static final String TAG = "AmbientDisplayConfig";
++    private static final IntentFilter sIntentFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
++
+     private final Context mContext;
+     private final boolean mAlwaysOnByDefault;
+     private final boolean mPickupGestureEnabledByDefault;
+@@ -55,7 +59,8 @@ public class AmbientDisplayConfiguration {
+             Settings.Secure.DOZE_DOUBLE_TAP_GESTURE,
+             Settings.Secure.DOZE_WAKE_LOCK_SCREEN_GESTURE,
+             Settings.Secure.DOZE_WAKE_DISPLAY_GESTURE,
+-            Settings.Secure.DOZE_TAP_SCREEN_GESTURE
++            Settings.Secure.DOZE_TAP_SCREEN_GESTURE,
++            Settings.Secure.DOZE_ON_CHARGE
+     };
+ 
+     /** Non-user configurable doze settings */
+@@ -231,8 +236,29 @@ public class AmbientDisplayConfiguration {
+      */
+     @TestApi
+     public boolean alwaysOnEnabled(int user) {
+-        return boolSetting(Settings.Secure.DOZE_ALWAYS_ON, user, mAlwaysOnByDefault ? 1 : 0)
+-                && alwaysOnAvailable() && !accessibilityInversionEnabled(user);
++        return alwaysOnEnabledSetting(user) || alwaysOnChargingEnabled(user);
++    }
++
++    public boolean alwaysOnEnabledSetting(int user) {
++        final boolean alwaysOnEnabled = Settings.Secure.getIntForUser(
++                mContext.getContentResolver(), Settings.Secure.DOZE_ALWAYS_ON,
++                mAlwaysOnByDefault ? 1 : 0, user) == 1;
++        return alwaysOnEnabled && alwaysOnAvailable() && !accessibilityInversionEnabled(user);
++    }
++
++    public boolean alwaysOnChargingEnabledSetting(int user) {
++        return Settings.Secure.getIntForUser(mContext.getContentResolver(),
++            Settings.Secure.DOZE_ON_CHARGE, 0, user) == 1;
++    }
++
++    private boolean alwaysOnChargingEnabled(int user) {
++        if (alwaysOnChargingEnabledSetting(user)) {
++            final Intent intent = mContext.registerReceiver(null, sIntentFilter, Context.RECEIVER_NOT_EXPORTED);
++            if (intent != null) {
++                return intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0;
++            }
++        }
++        return false;
+     }
+ 
+     /**
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 8feee476f..b7fd89970 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -13496,6 +13496,12 @@ public final class Settings {
+         @Readable
+         public static final String POWER_SOUNDS_ENABLED = "power_sounds_enabled";
+ 
++        /**
++         * Whether to enable DOZE only when charging
++         * @hide
++         */
++        public static final String DOZE_ON_CHARGE = "doze_on_charge";
++
+         /**
+          * URI for the "wireless charging started" sound.
+          * @hide
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/DozeParameters.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/DozeParameters.java
+index 24cf77858..bf444fdfa 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/DozeParameters.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/DozeParameters.java
+@@ -93,7 +93,6 @@ public class DozeParameters implements
+     private final UserTracker mUserTracker;
+     private final SecureSettings mSecureSettings;
+ 
+-    private boolean mDozeAlwaysOn;
+     private boolean mControlScreenOffAnimation;
+     private boolean mIsQuickPickupEnabled;
+ 
+@@ -275,7 +274,7 @@ public class DozeParameters implements
+      * @return {@code true} if enabled and available.
+      */
+     public boolean getAlwaysOn() {
+-        return mDozeAlwaysOn && !mBatteryController.isAodPowerSave();
++        return mAmbientDisplayConfiguration.alwaysOnEnabled(mUserTracker.getUserId()) && !mBatteryController.isAodPowerSave();
+     }
+ 
+     /**
+@@ -430,8 +429,6 @@ public class DozeParameters implements
+ 
+     @Override
+     public void onTuningChanged(String key, String newValue) {
+-        mDozeAlwaysOn = mAmbientDisplayConfiguration.alwaysOnEnabled(mUserTracker.getUserId());
+-
+         if (key.equals(Settings.Secure.DOZE_ALWAYS_ON)) {
+             updateControlScreenOff();
+         }
+diff --git a/services/core/java/com/android/server/power/PowerManagerService.java b/services/core/java/com/android/server/power/PowerManagerService.java
+index da2b6ab0e..1dbfd9387 100644
+--- a/services/core/java/com/android/server/power/PowerManagerService.java
++++ b/services/core/java/com/android/server/power/PowerManagerService.java
+@@ -1675,7 +1675,9 @@ public final class PowerManagerService extends SystemService
+         mWakeUpWhenPluggedOrUnpluggedSetting = LineageSettings.Global.getInt(resolver,
+                 LineageSettings.Global.WAKE_WHEN_PLUGGED_OR_UNPLUGGED,
+                 (mWakeUpWhenPluggedOrUnpluggedConfig ? 1 : 0)) == 1;
+-        mAlwaysOnEnabled = mAmbientDisplayConfiguration.alwaysOnEnabled(UserHandle.USER_CURRENT);
++        mAlwaysOnEnabled = mAmbientDisplayConfiguration.alwaysOnEnabledSetting(UserHandle.USER_CURRENT)
++            || (mAmbientDisplayConfiguration.alwaysOnChargingEnabledSetting(
++                    UserHandle.USER_CURRENT) && mIsPowered);
+ 
+         if (mSupportsDoubleTapWakeConfig) {
+             boolean doubleTapWakeEnabled = Settings.Secure.getIntForUser(resolver,
+-- 
+2.43.0
+

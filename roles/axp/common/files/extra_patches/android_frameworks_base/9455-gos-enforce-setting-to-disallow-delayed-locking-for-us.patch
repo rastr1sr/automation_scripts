@@ -1,0 +1,75 @@
+From 62c3ac6a6e8921d191e96c8df54130b347a21f10 Mon Sep 17 00:00:00 2001
+From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
+Date: Sun, 18 May 2025 03:25:36 +0000
+Subject: [PATCH] Enforce setting to disallow delayed locking for user when
+ stopped/locked
+
+---
+ .../com/android/server/am/UserController.java | 11 ++++++++
+ .../server/am/UserControllerHelper.java       | 25 +++++++++++++++++++
+ 2 files changed, 36 insertions(+)
+ create mode 100644 services/core/java/com/android/server/am/UserControllerHelper.java
+
+diff --git a/services/core/java/com/android/server/am/UserController.java b/services/core/java/com/android/server/am/UserController.java
+index 1a3c03dcc..d803fdfeb 100644
+--- a/services/core/java/com/android/server/am/UserController.java
++++ b/services/core/java/com/android/server/am/UserController.java
+@@ -1142,6 +1142,12 @@ class UserController implements Handler.Callback {
+             final IStopUserCallback stopUserCallback,
+             KeyEvictedCallback keyEvictedCallback) {
+         Slogf.i(TAG, "stopSingleUserLU userId=" + userId);
++        if (allowDelayedLocking && UserControllerHelper.disallowDelayedLockingForUser(
++                mInjector.getContext(), userId)) {
++            Slogf.i(TAG, "Disallowing delayed locking for userId=" + userId);
++            allowDelayedLocking = false;
++        }
++
+         if (android.multiuser.Flags.scheduleStopOfBackgroundUser()) {
+             mHandler.removeEqualMessages(SCHEDULED_STOP_BACKGROUND_USER_MSG,
+                     Integer.valueOf(userId));
+@@ -1540,6 +1546,11 @@ class UserController implements Handler.Callback {
+      * either due to a global device configuration or an individual user's property.
+      */
+     private boolean canDelayDataLockingForUser(@UserIdInt int userIdToLock) {
++        if (UserControllerHelper.disallowDelayedLockingForUser(mInjector.getContext(), userIdToLock)) {
++            Slogf.i(TAG, "Treating delayed data locking as false for userId=" + userIdToLock);
++            return false;
++        }
++
+         if (allowBiometricUnlockForPrivateProfile()) {
+             final UserProperties userProperties = getUserProperties(userIdToLock);
+             return (mDelayUserDataLocking || (userProperties != null
+diff --git a/services/core/java/com/android/server/am/UserControllerHelper.java b/services/core/java/com/android/server/am/UserControllerHelper.java
+new file mode 100644
+index 000000000..b1ea39e83
+--- /dev/null
++++ b/services/core/java/com/android/server/am/UserControllerHelper.java
+@@ -0,0 +1,25 @@
++package com.android.server.am;
++
++import android.annotation.UserIdInt;
++import android.content.Context;
++import android.ext.settings.ExtSettings;
++import android.os.Binder;
++
++import com.android.server.utils.Slogf;
++
++final class UserControllerHelper {
++
++    private static final String TAG = "UserControllerHelper";
++
++    static boolean disallowDelayedLockingForUser(Context ctx, @UserIdInt int userId) {
++        long token = Binder.clearCallingIdentity();
++        try {
++            return ExtSettings.DISALLOW_DELAYED_LOCKING_ON_USER_STOP.get(ctx, userId);
++        } catch (SecurityException e) {
++            Slogf.e(TAG, "caught exception for fetching setting to disallow delayed locking", e);
++            return false;
++        } finally {
++            Binder.restoreCallingIdentity(token);
++        }
++    }
++}
+-- 
+2.43.0
+

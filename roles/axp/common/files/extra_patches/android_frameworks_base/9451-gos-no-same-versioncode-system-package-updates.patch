@@ -1,0 +1,61 @@
+From 605013353a352b297646e1c32f40dc5d5f175a70 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Tue, 27 Dec 2022 02:16:41 +0000
+Subject: [PATCH] don't allow updating system packages to the same versionCode
+
+Ported from GrapheneOS 1f98507e6f8a without its fs-verity dependency (AXP fork: system version looked up via the disabled-system PackageSetting).
+---
+ .../server/pm/InstallPackageHelper.java       | 30 +++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+
+diff --git a/services/core/java/com/android/server/pm/InstallPackageHelper.java b/services/core/java/com/android/server/pm/InstallPackageHelper.java
+index e72806863..b8b6df498 100644
+--- a/services/core/java/com/android/server/pm/InstallPackageHelper.java
++++ b/services/core/java/com/android/server/pm/InstallPackageHelper.java
+@@ -139,6 +139,7 @@ import android.os.Process;
+ import android.os.RemoteException;
+ import android.os.SELinux;
+ import android.os.SystemClock;
++import android.os.SystemProperties;
+ import android.os.Trace;
+ import android.os.UserHandle;
+ import android.os.UserManager;
+@@ -1893,6 +1894,35 @@ final class InstallPackageHelper {
+             parsedPackage.setBaseApkPath(request.getApexInfo().modulePath);
+         }
+ 
++        // AXP fork (GrapheneOS 1f98507e6f8a): versionCode of many system packages is the SDK level
++        // and does not change between non-major OS updates, so an older build with the same
++        // versionCode could be installed over a system package. Block same-versionCode updates of
++        // preinstalled packages (newer versions, e.g. microG from F-Droid, are unaffected).
++        if (!isApex) {
++            long systemVersionCode = -1;
++            synchronized (mPm.mLock) {
++                final PackageSetting cur = mPm.mSettings.getPackageLPr(pkgName);
++                if (cur != null) {
++                    final PackageSetting disabled = mPm.mSettings.getDisabledSystemPkgLPr(cur);
++                    final PackageSetting sys = disabled != null ? disabled
++                            : (cur.isSystem() ? cur : null);
++                    if (sys != null) {
++                        systemVersionCode = sys.getVersionCode();
++                    }
++                }
++            }
++            if (systemVersionCode != -1
++                    && parsedPackage.getLongVersionCode() == systemVersionCode) {
++                String message = "Not allowed to update system package to the same versionCode";
++                if (Build.IS_DEBUGGABLE && SystemProperties.getBoolean(
++                        "persist.disable_same_versionCode_sys_pkg_update_check", false)) {
++                    Slog.d(TAG, message + ": " + pkgName);
++                } else {
++                    throw new PrepareFailure(PackageManager.INSTALL_FAILED_INTERNAL_ERROR, message);
++                }
++            }
++        }
++
+         PackageFreezer freezer = null;
+         if (!Flags.improveInstallFreeze()) {
+             freezer = freezePackageForInstall(pkgName, UserHandle.USER_ALL, installFlags,
+-- 
+2.43.0
+

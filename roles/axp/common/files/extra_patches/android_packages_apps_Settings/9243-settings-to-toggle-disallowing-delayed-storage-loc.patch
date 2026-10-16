@@ -1,0 +1,89 @@
+From 0064cda7ad1a6a5ce5032bf068d5b0e3711c6ffa Mon Sep 17 00:00:00 2001
+From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
+Date: Sun, 18 May 2025 03:27:16 +0000
+Subject: [PATCH] Settings to toggle disallowing delayed storage locking on
+
+(applied with fuzz on AXP.OS; original: s1-14b4ed1c72.patch)
+---
+ res/values/strings_ext.xml                    |  7 ++++
+ res/xml/private_space_settings.xml            |  7 ++++
+ ...sDisallowDelayedLockingPrefController.java | 34 +++++++++++++++++++
+ 3 files changed, 48 insertions(+)
+ create mode 100644 src/com/android/settings/privatespace/users/PsDisallowDelayedLockingPrefController.java
+
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index 2a4a1cf8..d24da4a7 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -22,3 +22,10 @@
+ "Allow automatically disabling exploit protections for apps that are known to need it"
+     </string>
+ </resources>
++    <string name="ps_disallow_delayed_locking_title">End session immediately on lock</string>
++    <string name="ps_disallow_delayed_locking_description">
++        Disallow delayed locking of storage when stopping or locking the current private profile.
++        This allows locking to work like end session to full secondary users
++        where strong authentication is required to unlock the storage.
++    </string>
++
+diff --git a/res/xml/private_space_settings.xml b/res/xml/private_space_settings.xml
+index 53bbc572..e6871f8e 100644
+--- a/res/xml/private_space_settings.xml
++++ b/res/xml/private_space_settings.xml
+@@ -61,6 +61,13 @@
+     <PreferenceCategory
+         android:title="@string/private_space_category_system">
+ 
++        <SwitchPreferenceCompat
++            android:key="private_space_disallow_delayed_locking"
++            android:title="@string/ps_disallow_delayed_locking_title"
++            android:summary="@string/ps_disallow_delayed_locking_description"
++            settings:controller="com.android.settings.privatespace.users.PsDisallowDelayedLockingPrefController"
++            settings:searchable="false" />
++
+         <Preference
+             android:key="private_space_delete"
+             android:title="@string/private_space_delete_title"
+diff --git a/src/com/android/settings/privatespace/users/PsDisallowDelayedLockingPrefController.java b/src/com/android/settings/privatespace/users/PsDisallowDelayedLockingPrefController.java
+new file mode 100644
+index 00000000..3276fd3d
+--- /dev/null
++++ b/src/com/android/settings/privatespace/users/PsDisallowDelayedLockingPrefController.java
+@@ -0,0 +1,34 @@
++package com.android.settings.privatespace.users;
++
++import android.content.Context;
++import android.ext.settings.BoolSetting;
++import android.ext.settings.ExtSettings;
++import android.os.UserHandle;
++import android.util.Log;
++
++import androidx.lifecycle.LifecycleOwner;
++
++import com.android.settings.ext.BoolSettingPrefController;
++import com.android.settings.privatespace.PrivateSpaceMaintainer;
++
++public class PsDisallowDelayedLockingPrefController extends BoolSettingPrefController {
++
++    private static final String TAG = "PsDisallowDelayedLockingPrefCtrl";
++
++    public PsDisallowDelayedLockingPrefController(Context ctx, String key) {
++        super(ctx, key, ExtSettings.DISALLOW_DELAYED_LOCKING_ON_USER_STOP,
++                PrivateSpaceMaintainer.getInstance(ctx).getPrivateProfileHandle());
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        PrivateSpaceMaintainer privateSpaceMaintainer = PrivateSpaceMaintainer.getInstance(mContext);
++        UserHandle privateSpaceUserHandle = privateSpaceMaintainer.getPrivateProfileHandle();
++        if (privateSpaceUserHandle == null) {
++            Log.w(TAG, "No private space user fetched, treating as unavailable");
++            return CONDITIONALLY_UNAVAILABLE;
++        }
++
++        return AVAILABLE;
++    }
++}
+-- 
+2.43.0
+

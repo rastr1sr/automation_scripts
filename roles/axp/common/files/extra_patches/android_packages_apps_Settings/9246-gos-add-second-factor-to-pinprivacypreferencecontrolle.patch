@@ -1,0 +1,80 @@
+From 8a52b45da8224f8a47fe2933f715e4038ba72a41 Mon Sep 17 00:00:00 2001
+From: Fred Underwood <underwoodfred@proton.me>
+Date: Mon, 23 Dec 2024 12:38:28 +1000
+Subject: [PATCH] add second factor to PinPrivacyPreferenceController
+
+(applied with fuzz on AXP.OS; original: s1-d5e4c24662359c35aa6fcaa55625836632590adc.patch)
+---
+ .../security/screenlock/PinPrivacyPreferenceController.kt     | 4 ++--
+ .../settings/security/screenlock/ScreenLockSettings.java      | 3 ++-
+ .../screenlock/PinPrivacyPreferenceControllerTest.java        | 4 ++--
+ 3 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/src/com/android/settings/security/screenlock/PinPrivacyPreferenceController.kt b/src/com/android/settings/security/screenlock/PinPrivacyPreferenceController.kt
+index 78656e88..626a2b29 100644
+--- a/src/com/android/settings/security/screenlock/PinPrivacyPreferenceController.kt
++++ b/src/com/android/settings/security/screenlock/PinPrivacyPreferenceController.kt
+@@ -20,15 +20,15 @@ import android.content.Context
+ import android.provider.Settings
+ import androidx.preference.Preference
+ import androidx.preference.TwoStatePreference
+-import com.android.internal.widget.LockPatternUtils
+ import com.android.internal.widget.LockPatternUtils.*
++import com.android.internal.widget.WrappedLockPatternUtils
+ import com.android.settings.core.PreferenceControllerMixin
+ import com.android.settingslib.core.AbstractPreferenceController
+ 
+ class PinPrivacyPreferenceController(
+     context: Context,
+     private val userId: Int,
+-    private val lockPatternUtils: LockPatternUtils
++    private val lockPatternUtils: WrappedLockPatternUtils,
+ ) : AbstractPreferenceController(context), PreferenceControllerMixin,
+     Preference.OnPreferenceChangeListener {
+ 
+diff --git a/src/com/android/settings/security/screenlock/ScreenLockSettings.java b/src/com/android/settings/security/screenlock/ScreenLockSettings.java
+index f811872e..2ee02371 100644
+--- a/src/com/android/settings/security/screenlock/ScreenLockSettings.java
++++ b/src/com/android/settings/security/screenlock/ScreenLockSettings.java
+@@ -25,6 +25,7 @@ import android.os.UserHandle;
+ import androidx.annotation.Nullable;
+ 
+ import com.android.internal.widget.LockPatternUtils;
++import com.android.internal.widget.WrappedLockPatternUtils;
+ import com.android.settings.R;
+ import com.android.settings.dashboard.DashboardFragment;
+ import com.android.settings.search.BaseSearchIndexProvider;
+@@ -81,7 +82,7 @@ public class ScreenLockSettings extends DashboardFragment
+         controllers.add(new PatternVisiblePreferenceController(
+                 context, MY_USER_ID, lockPatternUtils));
+         controllers.add(new PinPrivacyPreferenceController(
+-                context, MY_USER_ID, lockPatternUtils));
++                context, MY_USER_ID, new WrappedLockPatternUtils(lockPatternUtils, Primary)));
+         controllers.add(new PatternErrorVisiblePreferenceController(
+                 context, MY_USER_ID, lockPatternUtils));
+         controllers.add(new PatternDotsVisiblePreferenceController(
+diff --git a/tests/robotests/src/com/android/settings/security/screenlock/PinPrivacyPreferenceControllerTest.java b/tests/robotests/src/com/android/settings/security/screenlock/PinPrivacyPreferenceControllerTest.java
+index f7bd108e..85122928 100644
+--- a/tests/robotests/src/com/android/settings/security/screenlock/PinPrivacyPreferenceControllerTest.java
++++ b/tests/robotests/src/com/android/settings/security/screenlock/PinPrivacyPreferenceControllerTest.java
+@@ -29,7 +29,7 @@ import android.content.Context;
+ 
+ import androidx.preference.SwitchPreference;
+ 
+-import com.android.internal.widget.LockPatternUtils;
++import com.android.internal.widget.WrappedLockPatternUtils;
+ 
+ import org.junit.Before;
+ import org.junit.Ignore;
+@@ -46,7 +46,7 @@ public class PinPrivacyPreferenceControllerTest {
+     private static final int TEST_USER_ID = 0;
+ 
+     @Mock
+-    private LockPatternUtils mLockPatternUtils;
++    private WrappedLockPatternUtils mLockPatternUtils;
+     private Context mContext;
+     private PinPrivacyPreferenceController mController;
+     private SwitchPreference mPreference;
+-- 
+2.43.0
+

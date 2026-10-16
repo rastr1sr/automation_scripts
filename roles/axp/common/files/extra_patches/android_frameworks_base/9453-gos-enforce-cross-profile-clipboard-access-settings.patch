@@ -1,0 +1,54 @@
+From 4b450d125ea7cda0df008ab62be9e3691a2bb867 Mon Sep 17 00:00:00 2001
+From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
+Date: Tue, 25 Mar 2025 13:49:57 +0000
+Subject: [PATCH] Enforce cross profile clipboard access settings
+
+---
+ .../com/android/server/clipboard/ClipboardService.java    | 8 ++++++++
+ services/core/java/com/android/server/wm/DragState.java   | 4 ++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/services/core/java/com/android/server/clipboard/ClipboardService.java b/services/core/java/com/android/server/clipboard/ClipboardService.java
+index 83e817c55..a1126fb16 100644
+--- a/services/core/java/com/android/server/clipboard/ClipboardService.java
++++ b/services/core/java/com/android/server/clipboard/ClipboardService.java
+@@ -944,6 +944,10 @@ public class ClipboardService extends SystemService {
+         }
+         setPrimaryClipInternalLocked(clipboard, clip, uid, sourcePackage);
+ 
++        if (!android.ext.settings.CrossProfileClipboardAccessSettings
++                .isExportAccessAllowed(getContext(), userId)) {
++            return;
++        }
+         // Update related users
+         List<UserInfo> related = getRelatedProfiles(userId);
+         if (related != null) {
+@@ -975,6 +979,10 @@ public class ClipboardService extends SystemService {
+                     if (id != userId) {
+                         final boolean canCopyIntoProfile = !hasRestriction(
+                                 UserManager.DISALLOW_SHARE_INTO_MANAGED_PROFILE, id);
++                        if (!android.ext.settings.CrossProfileClipboardAccessSettings
++                                .isImportAccessAllowed(getContext(), id)) {
++                            continue;
++                        }
+                         if (canCopyIntoProfile) {
+                             Clipboard relatedClipboard = getClipboardLocked(id, deviceId);
+                             if (relatedClipboard != null) {
+diff --git a/services/core/java/com/android/server/wm/DragState.java b/services/core/java/com/android/server/wm/DragState.java
+index 1c4e487d2..e06c42a4c 100644
+--- a/services/core/java/com/android/server/wm/DragState.java
++++ b/services/core/java/com/android/server/wm/DragState.java
+@@ -500,6 +500,10 @@ class DragState {
+         final UserManagerInternal userManager = LocalServices.getService(UserManagerInternal.class);
+         mCrossProfileCopyAllowed = !userManager.getUserRestriction(
+                 mSourceUserId, UserManager.DISALLOW_CROSS_PROFILE_COPY_PASTE);
++        if (!android.ext.settings.CrossProfileClipboardAccessSettings
++                .isExportAccessAllowed(mDisplayContent.mAtmService.mContext, mSourceUserId)) {
++            mCrossProfileCopyAllowed = false;
++        }
+ 
+         if (DEBUG_DRAG) {
+             Slog.d(TAG_WM, "Broadcasting DRAG_STARTED at (" + touchX + ", " + touchY + ")");
+-- 
+2.43.0
+

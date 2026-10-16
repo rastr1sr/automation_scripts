@@ -1,0 +1,31 @@
+From 1fc21b5c08b91e7f9bae5ad08756d6740a39e74d Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Fri, 16 Oct 2026 02:20:30 +0000
+Subject: [PATCH] PowerManagerService: re-evaluate doze-on-charge when plugged
+ state changes
+
+---
+ .../java/com/android/server/power/PowerManagerService.java | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/services/core/java/com/android/server/power/PowerManagerService.java b/services/core/java/com/android/server/power/PowerManagerService.java
+index 1dbfd9387..b8649f0c8 100644
+--- a/services/core/java/com/android/server/power/PowerManagerService.java
++++ b/services/core/java/com/android/server/power/PowerManagerService.java
+@@ -2770,6 +2770,13 @@ public final class PowerManagerService extends SystemService
+             if (wasPowered != mIsPowered || oldPlugType != mPlugType) {
+                 mDirty |= DIRTY_IS_POWERED;
+ 
++                // AXP fork: doze-on-charge depends on the plugged state
++                if (mAmbientDisplayConfiguration.alwaysOnChargingEnabledSetting(
++                        UserHandle.USER_CURRENT)) {
++                    mAlwaysOnEnabled = mAmbientDisplayConfiguration.alwaysOnEnabledSetting(
++                            UserHandle.USER_CURRENT) || mIsPowered;
++                }
++
+                 // Update wireless dock detection state.
+                 final boolean dockedOnWirelessCharger = mWirelessChargerDetector.update(
+                         mIsPowered, mPlugType);
+-- 
+2.43.0
+

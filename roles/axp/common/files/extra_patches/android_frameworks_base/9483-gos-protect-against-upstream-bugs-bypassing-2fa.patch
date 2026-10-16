@@ -1,0 +1,25 @@
+From 8113788a21dd4fd8df55644e732784bdaa0adabe Mon Sep 17 00:00:00 2001
+From: Daniel Micay <daniel.micay@grapheneos.org>
+Date: Tue, 14 Jan 2025 18:41:55 -0500
+Subject: [PATCH] protect against upstream bugs bypassing 2FA
+
+---
+ .../systemui/statusbar/phone/BiometricUnlockController.java     | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
+index 5a5257b9c..76efa0c5c 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
+@@ -630,7 +630,7 @@ public class BiometricUnlockController extends KeyguardUpdateMonitorCallback imp
+                 // conditional is always true. Everything is running in the same thread so not
+                 // possible for this implication to be invalidated externally.
+                 if (mKeyguardStateController.isUnlocked()) {
+-                    return MODE_WAKE_AND_UNLOCK;
++                    return MODE_ONLY_WAKE;
+                 }
+                 // This is unreachable.
+                 return MODE_ONLY_WAKE;
+-- 
+2.43.0
+

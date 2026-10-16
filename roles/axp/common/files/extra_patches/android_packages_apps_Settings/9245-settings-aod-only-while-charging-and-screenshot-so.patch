@@ -1,0 +1,167 @@
+From 99a735f29ffabca64703cc07beebe773ab75937f Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Fri, 16 Oct 2026 02:22:35 +0000
+Subject: [PATCH] Settings: AOD only while charging and screenshot sound
+ toggles
+
+Lock screen > Always-on display only while charging (Settings.Secure.doze_on_charge, crDroid); Sound > Screenshot sound (Settings.System.screenshot_shutter_sound, AOSPA).
+---
+ res/values/calyx_strings.xml                  |  4 ++
+ res/xml/security_lockscreen_settings.xml      |  7 +++
+ res/xml/sound_settings.xml                    |  7 +++
+ .../DozeOnChargePreferenceController.java     | 43 +++++++++++++++++++
+ .../ScreenshotSoundPreferenceController.java  | 43 +++++++++++++++++++
+ 5 files changed, 104 insertions(+)
+ create mode 100644 src/com/android/settings/display/DozeOnChargePreferenceController.java
+ create mode 100644 src/com/android/settings/notification/ScreenshotSoundPreferenceController.java
+
+diff --git a/res/values/calyx_strings.xml b/res/values/calyx_strings.xml
+index 8b49cc3b..238f5c0a 100644
+--- a/res/values/calyx_strings.xml
++++ b/res/values/calyx_strings.xml
+@@ -60,4 +60,8 @@ Duress PIN works the same way duress password does."</string>
+     <string name="duress_pwd_save_error">Duress PIN and password were not saved.\n\nDetails:\n%1$s</string>
+     <string name="duress_pwd_delete_error">Duress PIN and password were not deleted.\n\nDetails:\n%1$s</string>
+     <string name="duress_pwd_error_dialog_dismiss">Dismiss</string>
++    <!-- AXP fork: comfort toggles -->
++    <string name="doze_on_charge_title">Always-on display only while charging</string>
++    <string name="doze_on_charge_summary">Show time and info on the lock screen only while the phone is plugged in</string>
++    <string name="screenshot_shutter_sound_title">Screenshot sound</string>
+ </resources>
+diff --git a/res/xml/security_lockscreen_settings.xml b/res/xml/security_lockscreen_settings.xml
+index afa328d9..db37e3c6 100644
+--- a/res/xml/security_lockscreen_settings.xml
++++ b/res/xml/security_lockscreen_settings.xml
+@@ -105,6 +105,13 @@
+             settings:controller="com.android.settings.display.AmbientDisplayAlwaysOnPreferenceController"
+             settings:userRestriction="no_ambient_display" />
+ 
++        <!-- AXP fork: always-on display only while charging (crDroid) -->
++        <SwitchPreferenceCompat
++            android:key="doze_on_charge"
++            android:title="@string/doze_on_charge_title"
++            android:summary="@string/doze_on_charge_summary"
++            settings:controller="com.android.settings.display.DozeOnChargePreferenceController" />
++
+         <Preference
+             android:key="ambient_display_tap"
+             android:title="@string/ambient_display_tap_screen_title"
+diff --git a/res/xml/sound_settings.xml b/res/xml/sound_settings.xml
+index 6f932a7e..89d40ffc 100644
+--- a/res/xml/sound_settings.xml
++++ b/res/xml/sound_settings.xml
+@@ -180,6 +180,13 @@
+         android:title="@string/screen_locking_sounds_title"
+         android:order="-45"/>
+ 
++    <!-- AXP fork: screenshot shutter sound (AOSPA) -->
++    <SwitchPreferenceCompat
++        android:key="screenshot_shutter_sound"
++        android:title="@string/screenshot_shutter_sound_title"
++        android:order="-44"
++        settings:controller="com.android.settings.notification.ScreenshotSoundPreferenceController"/>
++
+     <!-- Charging sounds -->
+     <SwitchPreferenceCompat
+         android:key="charging_sounds"
+diff --git a/src/com/android/settings/display/DozeOnChargePreferenceController.java b/src/com/android/settings/display/DozeOnChargePreferenceController.java
+new file mode 100644
+index 00000000..b30c3a3e
+--- /dev/null
++++ b/src/com/android/settings/display/DozeOnChargePreferenceController.java
+@@ -0,0 +1,43 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++// AXP fork: always-on display only while charging (crDroid)
++package com.android.settings.display;
++
++import android.content.Context;
++import android.provider.Settings;
++
++import com.android.settings.core.TogglePreferenceController;
++
++public class DozeOnChargePreferenceController extends TogglePreferenceController {
++
++    public DozeOnChargePreferenceController(Context context, String key) {
++        super(context, key);
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        return AVAILABLE;
++    }
++
++    @Override
++    public boolean isChecked() {
++        return Settings.Secure.getInt(mContext.getContentResolver(), "doze_on_charge", 0) != 0;
++    }
++
++    @Override
++    public boolean setChecked(boolean isChecked) {
++        return Settings.Secure.putInt(mContext.getContentResolver(), "doze_on_charge", isChecked ? 1 : 0);
++    }
++
++    @Override
++    public boolean isSliceable() {
++        return false;
++    }
++
++    @Override
++    public int getSliceHighlightMenuRes() {
++        return NO_RES;
++    }
++}
+diff --git a/src/com/android/settings/notification/ScreenshotSoundPreferenceController.java b/src/com/android/settings/notification/ScreenshotSoundPreferenceController.java
+new file mode 100644
+index 00000000..50ee2ff1
+--- /dev/null
++++ b/src/com/android/settings/notification/ScreenshotSoundPreferenceController.java
+@@ -0,0 +1,43 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++// AXP fork: screenshot shutter sound toggle (AOSPA)
++package com.android.settings.notification;
++
++import android.content.Context;
++import android.provider.Settings;
++
++import com.android.settings.core.TogglePreferenceController;
++
++public class ScreenshotSoundPreferenceController extends TogglePreferenceController {
++
++    public ScreenshotSoundPreferenceController(Context context, String key) {
++        super(context, key);
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        return AVAILABLE;
++    }
++
++    @Override
++    public boolean isChecked() {
++        return Settings.System.getInt(mContext.getContentResolver(), "screenshot_shutter_sound", 1) != 0;
++    }
++
++    @Override
++    public boolean setChecked(boolean isChecked) {
++        return Settings.System.putInt(mContext.getContentResolver(), "screenshot_shutter_sound", isChecked ? 1 : 0);
++    }
++
++    @Override
++    public boolean isSliceable() {
++        return false;
++    }
++
++    @Override
++    public int getSliceHighlightMenuRes() {
++        return NO_RES;
++    }
++}
+-- 
+2.43.0
+

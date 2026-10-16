@@ -1,0 +1,419 @@
+From 7146bbce030f8dfa589c90a8b17926e745cbb8dc Mon Sep 17 00:00:00 2001
+From: Fred Underwood <underwoodfred@proton.me>
+Date: Sun, 22 Dec 2024 06:34:24 +1000
+Subject: [PATCH] add second factor to FingerprintService
+
+---
+ .../fingerprint/FingerprintManager.java       | 41 ++++++++++++++++++
+ .../fingerprint/IFingerprintService.aidl      |  9 ++++
+ .../biometrics/log/BiometricContext.java      | 12 ++++++
+ .../log/BiometricContextProvider.java         | 27 +++++++++++-
+ .../sensors/AuthenticationClient.java         | 17 ++++++--
+ .../fingerprint/FingerprintService.java       | 14 +++++++
+ .../biometrics/BiometricServiceTest.java      |  5 ++-
+ .../log/BiometricContextProviderTest.java     |  8 +++-
+ .../FingerprintAuthenticationClientTest.java  | 42 +++++++++++++++++++
+ 9 files changed, 167 insertions(+), 8 deletions(-)
+
+diff --git a/core/java/android/hardware/fingerprint/FingerprintManager.java b/core/java/android/hardware/fingerprint/FingerprintManager.java
+index 590c4d661..4f44915f6 100644
+--- a/core/java/android/hardware/fingerprint/FingerprintManager.java
++++ b/core/java/android/hardware/fingerprint/FingerprintManager.java
+@@ -32,7 +32,9 @@ import static android.hardware.fingerprint.FingerprintSensorProperties.TYPE_POWE
+ import static com.android.internal.util.FrameworkStatsLog.AUTH_DEPRECATED_APIUSED__DEPRECATED_API__API_FINGERPRINT_MANAGER_AUTHENTICATE;
+ import static com.android.internal.util.FrameworkStatsLog.AUTH_DEPRECATED_APIUSED__DEPRECATED_API__API_FINGERPRINT_MANAGER_HAS_ENROLLED_FINGERPRINTS;
+ import static com.android.internal.util.FrameworkStatsLog.AUTH_DEPRECATED_APIUSED__DEPRECATED_API__API_FINGERPRINT_MANAGER_IS_HARDWARE_DETECTED;
++import static java.util.Objects.requireNonNull;
+ 
++import android.annotation.CheckResult;
+ import android.annotation.FlaggedApi;
+ import android.annotation.IntDef;
+ import android.annotation.NonNull;
+@@ -667,6 +669,45 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
+         }
+     }
+ 
++    /** @hide */ public static final int SUCCESS = 0;
++    /** @hide */ public static final int ERROR_NO_PENDING_AUTH_TOKEN = 1;
++    /** @hide */ public static final int ERROR_UNABLE_TO_ADD_AUTH_TOKEN_TO_KEYSTORE = 2;
++
++    /** @hide */
++    @IntDef({SUCCESS, ERROR_NO_PENDING_AUTH_TOKEN, ERROR_UNABLE_TO_ADD_AUTH_TOKEN_TO_KEYSTORE})
++    @Retention(RetentionPolicy.SOURCE)
++    public @interface AddPendingAuthTokenResult {}
++
++    /**
++     * Add a pending hardware auth token to KeyStore. This should only be called after biometric
++     * second factor has succeeded.
++     * @hide
++     */
++    @RequiresPermission(USE_BIOMETRIC_INTERNAL)
++    @CheckResult
++    public @AddPendingAuthTokenResult int addPendingAuthTokenToKeyStore(final int userId) {
++        IFingerprintService service = requireNonNull(mService, "mService");
++        try {
++            return service.addPendingAuthTokenToKeyStore(userId);
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    /**
++     * Clear all pending auth tokens.
++     * @hide
++     */
++    @RequiresPermission(USE_BIOMETRIC_INTERNAL)
++    public void clearPendingAuthTokens() {
++        IFingerprintService service = requireNonNull(mService, "mService");
++        try {
++            service.clearPendingAuthTokens();
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
+     /**
+      * Uses the fingerprint hardware to detect for the presence of a finger, without giving details
+      * about accept/reject/lockout.
+diff --git a/core/java/android/hardware/fingerprint/IFingerprintService.aidl b/core/java/android/hardware/fingerprint/IFingerprintService.aidl
+index 370f097b6..2b3916c2f 100644
+--- a/core/java/android/hardware/fingerprint/IFingerprintService.aidl
++++ b/core/java/android/hardware/fingerprint/IFingerprintService.aidl
+@@ -61,6 +61,15 @@ interface IFingerprintService {
+     long authenticate(IBinder token, long operationId, IFingerprintServiceReceiver receiver,
+             in FingerprintAuthenticateOptions options);
+ 
++    // Add a pending hardware auth token to KeyStore. This should only be called after biometric
++    // second factor has succeeded.
++    @EnforcePermission("USE_BIOMETRIC_INTERNAL")
++    int addPendingAuthTokenToKeyStore(int userId);
++
++    // Clear all pending auth tokens.
++    @EnforcePermission("USE_BIOMETRIC_INTERNAL")
++    void clearPendingAuthTokens();
++
+     // Uses the fingerprint hardware to detect for the presence of a finger, without giving details
+     // about accept/reject/lockout. A requestId is returned that can be used to cancel this
+     // operation.
+diff --git a/services/core/java/com/android/server/biometrics/log/BiometricContext.java b/services/core/java/com/android/server/biometrics/log/BiometricContext.java
+index 7a8e25b76..93cc09394 100644
+--- a/services/core/java/com/android/server/biometrics/log/BiometricContext.java
++++ b/services/core/java/com/android/server/biometrics/log/BiometricContext.java
+@@ -22,9 +22,12 @@ import android.content.Context;
+ import android.hardware.biometrics.AuthenticateOptions;
+ import android.hardware.biometrics.IBiometricContextListener;
+ import android.hardware.biometrics.common.OperationContext;
++import android.security.KeyStoreAuthorization;
+ import android.view.Surface;
+ 
++import com.android.internal.widget.LockPatternUtils;
+ import com.android.server.biometrics.sensors.AuthSessionCoordinator;
++import com.android.server.biometrics.sensors.BiometricAuthTokenStore;
+ 
+ import java.util.function.Consumer;
+ 
+@@ -100,4 +103,13 @@ public interface BiometricContext {
+ 
+     /** Obtains an AuthSessionCoordinator. */
+     AuthSessionCoordinator getAuthSessionCoordinator();
++
++    /** Obtains the BiometricAuthTokenStore. */
++    BiometricAuthTokenStore getAuthTokenStore();
++
++    /** Obtains the LockPatternUtils. */
++    LockPatternUtils getLockPatternUtils();
++
++    /** Obtains the KeyStore. */
++    KeyStoreAuthorization getKeyStore();
+ }
+diff --git a/services/core/java/com/android/server/biometrics/log/BiometricContextProvider.java b/services/core/java/com/android/server/biometrics/log/BiometricContextProvider.java
+index a17de3d57..34abb808c 100644
+--- a/services/core/java/com/android/server/biometrics/log/BiometricContextProvider.java
++++ b/services/core/java/com/android/server/biometrics/log/BiometricContextProvider.java
+@@ -30,6 +30,7 @@ import android.os.Handler;
+ import android.os.RemoteException;
+ import android.os.ServiceManager;
+ import android.os.ServiceManager.ServiceNotFoundException;
++import android.security.KeyStoreAuthorization;
+ import android.util.Slog;
+ import android.view.Display;
+ import android.view.WindowManager;
+@@ -38,7 +39,9 @@ import com.android.internal.annotations.VisibleForTesting;
+ import com.android.internal.logging.InstanceId;
+ import com.android.internal.statusbar.ISessionListener;
+ import com.android.internal.statusbar.IStatusBarService;
++import com.android.internal.widget.LockPatternUtils;
+ import com.android.server.biometrics.sensors.AuthSessionCoordinator;
++import com.android.server.biometrics.sensors.BiometricAuthTokenStore;
+ 
+ import java.util.Map;
+ import java.util.concurrent.ConcurrentHashMap;
+@@ -66,7 +69,9 @@ public final class BiometricContextProvider implements BiometricContext {
+                             (WindowManager) context.getSystemService(Context.WINDOW_SERVICE),
+                             IStatusBarService.Stub.asInterface(ServiceManager.getServiceOrThrow(
+                                     Context.STATUS_BAR_SERVICE)), null /* handler */,
+-                            new AuthSessionCoordinator());
++                            new AuthSessionCoordinator(),
++                            new BiometricAuthTokenStore(KeyStoreAuthorization.getInstance()),
++                            new LockPatternUtils(context));
+                 } catch (ServiceNotFoundException e) {
+                     throw new IllegalStateException("Failed to find required service", e);
+                 }
+@@ -88,6 +93,11 @@ public final class BiometricContextProvider implements BiometricContext {
+     private int mFoldState = IBiometricContextListener.FoldState.UNKNOWN;
+     private int mDisplayState = AuthenticateOptions.DISPLAY_STATE_UNKNOWN;
+     private boolean mIsHardwareIgnoringTouches = false;
++    @NonNull
++    private BiometricAuthTokenStore mAuthTokenStore;
++    @NonNull
++    private LockPatternUtils mLockPatternUtils;
++
+     @VisibleForTesting
+     final BroadcastReceiver mDockStateReceiver = new BroadcastReceiver() {
+         @Override
+@@ -102,10 +112,14 @@ public final class BiometricContextProvider implements BiometricContext {
+     public BiometricContextProvider(@NonNull Context context,
+             @NonNull WindowManager windowManager,
+             @NonNull IStatusBarService service, @Nullable Handler handler,
+-            @NonNull AuthSessionCoordinator authSessionCoordinator) {
++            @NonNull AuthSessionCoordinator authSessionCoordinator,
++            @NonNull BiometricAuthTokenStore authTokenStore,
++            @NonNull LockPatternUtils lockPatternUtils) {
+         mWindowManager = windowManager;
+         mAuthSessionCoordinator = authSessionCoordinator;
+         mHandler = handler;
++        mAuthTokenStore = authTokenStore;
++        mLockPatternUtils = lockPatternUtils;
+ 
+         subscribeBiometricContextListener(service);
+         subscribeDockState(context);
+@@ -264,6 +278,15 @@ public final class BiometricContextProvider implements BiometricContext {
+         });
+     }
+ 
++    @Override
++    public BiometricAuthTokenStore getAuthTokenStore() { return mAuthTokenStore; }
++
++    @Override
++    public LockPatternUtils getLockPatternUtils() { return mLockPatternUtils; }
++
++    @Override
++    public KeyStoreAuthorization getKeyStore() { return KeyStoreAuthorization.getInstance(); }
++
+     @Override
+     public String toString() {
+         return "[keyguard session: " + getKeyguardEntrySessionInfo() + ", "
+diff --git a/services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java b/services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java
+index 8a9858548..05a76cf6a 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java
++++ b/services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java
+@@ -245,16 +245,25 @@ public abstract class AuthenticationClient<T, O extends AuthenticateOptions>
+             // For BP, BiometricService will add the authToken to Keystore.
+             if (!isBiometricPrompt()) {
+                 if (mIsStrongBiometric) {
++                    // It would be preferable to withhold this until second factor has succeeded,
++                    // but being time bound adds difficulty.
+                     mBiometricManager.resetLockoutTimeBound(getToken(),
+                             getContext().getOpPackageName(),
+                             getSensorId(), getTargetUserId(), byteToken);
+                 }
+ 
+-                final int result = KeyStoreAuthorization.getInstance().addAuthToken(byteToken);
+-                if (result != 0) {
+-                    Slog.d(TAG, "Error adding auth token : " + result);
++                boolean isSecondFactorEnabled = getBiometricContext().getLockPatternUtils()
++                        .isBiometricSecondFactorEnabled(getTargetUserId());
++                if (isSecondFactorEnabled) {
++                    getBiometricContext().getAuthTokenStore().storePendingAuthToken(
++                            getTargetUserId(), byteToken);
+                 } else {
+-                    Slog.d(TAG, "addAuthToken succeeded");
++                    final int result = getBiometricContext().getKeyStore().addAuthToken(byteToken);
++                    if (result != 0 /* success */) {
++                        Slog.d(TAG, "Error adding auth token : " + result);
++                    } else {
++                        Slog.d(TAG, "addAuthToken succeeded");
++                    }
+                 }
+             } else {
+                 Slog.d(TAG, "Skipping addAuthToken");
+diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java
+index 2f6ba0b85..859d9cb95 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java
++++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java
+@@ -355,6 +355,20 @@ public class FingerprintService extends SystemService {
+                     restricted, statsClient, isKeyguard);
+         }
+ 
++        @android.annotation.EnforcePermission(android.Manifest.permission.USE_BIOMETRIC_INTERNAL)
++        @Override // Binder call
++        public int addPendingAuthTokenToKeyStore(final int userId) {
++            super.addPendingAuthTokenToKeyStore_enforcePermission();
++            return mBiometricContext.getAuthTokenStore().addPendingAuthTokenToKeyStore(userId);
++        }
++
++        @android.annotation.EnforcePermission(android.Manifest.permission.USE_BIOMETRIC_INTERNAL)
++        @Override // Binder call
++        public void clearPendingAuthTokens() {
++            super.clearPendingAuthTokens_enforcePermission();
++            mBiometricContext.getAuthTokenStore().clearPendingAuthTokens();
++        }
++
+         private long authenticateWithPrompt(
+                 final long operationId,
+                 @NonNull final FingerprintSensorPropertiesInternal props,
+diff --git a/services/tests/servicestests/src/com/android/server/biometrics/BiometricServiceTest.java b/services/tests/servicestests/src/com/android/server/biometrics/BiometricServiceTest.java
+index 88829c1a9..e31d2cf70 100644
+--- a/services/tests/servicestests/src/com/android/server/biometrics/BiometricServiceTest.java
++++ b/services/tests/servicestests/src/com/android/server/biometrics/BiometricServiceTest.java
+@@ -109,8 +109,10 @@ import androidx.test.filters.SmallTest;
+ import com.android.internal.R;
+ import com.android.internal.statusbar.ISessionListener;
+ import com.android.internal.statusbar.IStatusBarService;
++import com.android.internal.widget.LockPatternUtils;
+ import com.android.server.biometrics.log.BiometricContextProvider;
+ import com.android.server.biometrics.sensors.AuthSessionCoordinator;
++import com.android.server.biometrics.sensors.BiometricAuthTokenStore;
+ import com.android.server.biometrics.sensors.LockoutTracker;
+ 
+ import org.junit.Before;
+@@ -281,7 +283,8 @@ public class BiometricServiceTest {
+                         new DisplayInfo(), DEFAULT_DISPLAY_ADJUSTMENTS));
+         mBiometricContextProvider = new BiometricContextProvider(mContext, mWindowManager,
+                 mStatusBarService, null /* handler */,
+-                mAuthSessionCoordinator);
++                mAuthSessionCoordinator, new BiometricAuthTokenStore(mKeyStoreAuthorization),
++                new LockPatternUtils(mContext));
+         when(mInjector.getBiometricContext(any())).thenReturn(mBiometricContextProvider);
+         when(mInjector.getKeyStoreAuthorization()).thenReturn(mKeyStoreAuthorization);
+         when(mInjector.getGateKeeperService()).thenReturn(mGateKeeperService);
+diff --git a/services/tests/servicestests/src/com/android/server/biometrics/log/BiometricContextProviderTest.java b/services/tests/servicestests/src/com/android/server/biometrics/log/BiometricContextProviderTest.java
+index 960357f41..6ea375275 100644
+--- a/services/tests/servicestests/src/com/android/server/biometrics/log/BiometricContextProviderTest.java
++++ b/services/tests/servicestests/src/com/android/server/biometrics/log/BiometricContextProviderTest.java
+@@ -43,6 +43,7 @@ import android.os.RemoteException;
+ import android.platform.test.annotations.Presubmit;
+ import android.platform.test.flag.junit.CheckFlagsRule;
+ import android.platform.test.flag.junit.DeviceFlagsValueProvider;
++import android.security.KeyStoreAuthorization;
+ import android.testing.TestableContext;
+ import android.view.Display;
+ import android.view.DisplayInfo;
+@@ -54,6 +55,8 @@ import androidx.test.platform.app.InstrumentationRegistry;
+ import com.android.internal.logging.InstanceId;
+ import com.android.internal.statusbar.ISessionListener;
+ import com.android.internal.statusbar.IStatusBarService;
++import com.android.internal.widget.LockPatternUtils;
++import com.android.server.biometrics.sensors.BiometricAuthTokenStore;
+ 
+ import org.junit.Before;
+ import org.junit.Rule;
+@@ -90,6 +93,8 @@ public class BiometricContextProviderTest {
+     @Mock
+     private Consumer<OperationContext> mStartHalConsumer;
+ 
++    private KeyStoreAuthorization mKeyStoreAuthorization;
++
+     private final FingerprintAuthenticateOptions mAuthenticateOptions =
+             new FingerprintAuthenticateOptions.Builder().build();
+     private final OperationContextExt mOpContext = new OperationContextExt(true);
+@@ -103,7 +108,8 @@ public class BiometricContextProviderTest {
+                         new DisplayInfo(), DEFAULT_DISPLAY_ADJUSTMENTS));
+         mProvider = new BiometricContextProvider(mContext, mWindowManager,
+                 mStatusBarService, null /* handler */,
+-                null /* authSessionCoordinator */);
++                null /* authSessionCoordinator */, new BiometricAuthTokenStore(mKeyStoreAuthorization),
++                new LockPatternUtils(mContext));
+         ArgumentCaptor<IBiometricContextListener> captor =
+                 ArgumentCaptor.forClass(IBiometricContextListener.class);
+         verify(mStatusBarService).setBiometicContextListener(captor.capture());
+diff --git a/services/tests/servicestests/src/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintAuthenticationClientTest.java b/services/tests/servicestests/src/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintAuthenticationClientTest.java
+index 7e1d42117..b800f06f7 100644
+--- a/services/tests/servicestests/src/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintAuthenticationClientTest.java
++++ b/services/tests/servicestests/src/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintAuthenticationClientTest.java
+@@ -68,12 +68,14 @@ import android.platform.test.annotations.Presubmit;
+ import android.platform.test.flag.junit.CheckFlagsRule;
+ import android.platform.test.flag.junit.DeviceFlagsValueProvider;
+ import android.platform.test.flag.junit.SetFlagsRule;
++import android.security.KeyStoreAuthorization;
+ import android.testing.TestableContext;
+ 
+ import androidx.test.filters.SmallTest;
+ import androidx.test.platform.app.InstrumentationRegistry;
+ 
+ import com.android.internal.R;
++import com.android.internal.widget.LockPatternUtils;
+ import com.android.server.biometrics.log.BiometricContext;
+ import com.android.server.biometrics.log.BiometricLogger;
+ import com.android.server.biometrics.log.CallbackWithProbe;
+@@ -82,6 +84,7 @@ import com.android.server.biometrics.log.Probe;
+ import com.android.server.biometrics.sensors.AuthSessionCoordinator;
+ import com.android.server.biometrics.sensors.AuthenticationClient;
+ import com.android.server.biometrics.sensors.AuthenticationStateListeners;
++import com.android.server.biometrics.sensors.BiometricAuthTokenStore;
+ import com.android.server.biometrics.sensors.ClientMonitorCallback;
+ import com.android.server.biometrics.sensors.ClientMonitorCallbackConverter;
+ import com.android.server.biometrics.sensors.LockoutTracker;
+@@ -138,6 +141,12 @@ public class FingerprintAuthenticationClientTest {
+     @Mock
+     private BiometricContext mBiometricContext;
+     @Mock
++    private LockPatternUtils mLockPatternUtils;
++    @Mock
++    private BiometricAuthTokenStore mBiometricAuthTokenStore;
++    @Mock
++    private KeyStoreAuthorization mKeyStoreAuthorization;
++    @Mock
+     private BiometricManager mBiometricManager;
+     @Mock
+     private IUdfpsOverlayController mUdfpsOverlayController;
+@@ -198,6 +207,9 @@ public class FingerprintAuthenticationClientTest {
+                 new CallbackWithProbe<>(mLuxProbe, i.getArgument(0)));
+         when(mBiometricContext.updateContext(any(), anyBoolean())).thenAnswer(
+                 i -> i.getArgument(0));
++        when(mBiometricContext.getLockPatternUtils()).thenReturn(mLockPatternUtils);
++        when(mBiometricContext.getAuthTokenStore()).thenReturn(mBiometricAuthTokenStore);
++        when(mBiometricContext.getKeyStore()).thenReturn(mKeyStoreAuthorization);
+     }
+ 
+     @Test
+@@ -679,6 +691,36 @@ public class FingerprintAuthenticationClientTest {
+         verify(mLockoutTracker, never()).addFailedAttemptForUser(anyInt());
+     }
+ 
++    @Test
++    public void testOnAuthenticated_secondFactorEnabled_storesPendingAuthToken()
++            throws RemoteException {
++        final FingerprintAuthenticationClient client = createClient(1 /* version */,
++                true /* allowBackgroundAuthentication */, false /* isBiometricPrompt */,
++                mClientMonitorCallbackConverter, mLockoutTracker);
++
++        when(mLockPatternUtils.isBiometricSecondFactorEnabled(anyInt())).thenReturn(true);
++
++        client.onAuthenticated(new Fingerprint("friendly", 1 /* fingerId */,
++                2 /* deviceId */), true /* authenticated */, new ArrayList<>());
++
++        verify(mBiometricAuthTokenStore).storePendingAuthToken(eq(USER_ID), any());
++    }
++
++    @Test
++    public void testOnAuthenticated_secondFactorDisabled_addsAuthToken() throws RemoteException {
++        final FingerprintAuthenticationClient client = createClient(1 /* version */,
++                true /* allowBackgroundAuthentication */, false /* isBiometricPrompt */,
++                mClientMonitorCallbackConverter, mLockoutTracker);
++
++        when(mLockPatternUtils.isBiometricSecondFactorEnabled(anyInt())).thenReturn(false);
++
++        client.onAuthenticated(new Fingerprint("friendly", 1 /* fingerId */,
++                2 /* deviceId */), true /* authenticated */, new ArrayList<>());
++
++        // Refer to BiometricServiceTest#testAuthenticate_happyPathWithoutConfirmation.
++        verify(mKeyStoreAuthorization).addAuthToken(any(byte[].class));
++    }
++
+     @Test
+     public void testLockoutTracker_authFailed() throws RemoteException {
+         final FingerprintAuthenticationClient client = createClient(1 /* version */,
+-- 
+2.43.0
+

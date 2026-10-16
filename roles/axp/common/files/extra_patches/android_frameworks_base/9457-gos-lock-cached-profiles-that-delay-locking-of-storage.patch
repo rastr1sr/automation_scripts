@@ -1,0 +1,54 @@
+From d103100dda3f6aee2dc3b0a28f8aa35aba0e532e Mon Sep 17 00:00:00 2001
+From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
+Date: Tue, 20 May 2025 14:07:58 +0000
+Subject: [PATCH] Lock cached profiles that delay locking of storage when
+ parent user is stopped
+
+---
+ .../com/android/server/am/UserController.java | 23 +++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/services/core/java/com/android/server/am/UserController.java b/services/core/java/com/android/server/am/UserController.java
+index b319a78fc..a74ae0f2c 100644
+--- a/services/core/java/com/android/server/am/UserController.java
++++ b/services/core/java/com/android/server/am/UserController.java
+@@ -1579,6 +1579,24 @@ class UserController implements Handler.Callback {
+         userIds.add(userId);
+         int userGroupId = mUserProfileGroupIds.get(userId, UserInfo.NO_PROFILE_GROUP_ID);
+         if (userGroupId == userId) {
++            SparseIntArray delayedLockUsersToLock = new SparseIntArray();
++            final int sizeOfDelayedStorageLocking = mLastActiveUsersForDelayedLocking.size();
++            for (int i = sizeOfDelayedStorageLocking - 1; i >= 0; --i) {
++                Integer userIdWithDelayedLocking = mLastActiveUsersForDelayedLocking.get(i);
++                if (userIdWithDelayedLocking == null) {
++                    continue;
++                }
++                int userIdWithDelayedLockingGroupId = mUserProfileGroupIds.get(
++                        userIdWithDelayedLocking, UserInfo.NO_PROFILE_GROUP_ID);
++                boolean sameGroup = (userGroupId != UserInfo.NO_PROFILE_GROUP_ID)
++                        && (userGroupId == userIdWithDelayedLockingGroupId);
++                // userId has already been added
++                boolean sameUserId = userIdWithDelayedLocking == userId;
++                if (!sameGroup || sameUserId) {
++                    continue;
++                }
++                delayedLockUsersToLock.append(userIdWithDelayedLocking, 1);
++            }
+             // The user is the parent of the profile group. Stop its profiles too.
+             for (int i = 0; i < startedUsersSize; i++) {
+                 UserState uss = mStartedUsers.valueAt(i);
+@@ -1594,6 +1612,11 @@ class UserController implements Handler.Callback {
+                     continue;
+                 }
+                 userIds.add(startedUserId);
++                delayedLockUsersToLock.delete(startedUserId);
++            }
++            for (int j = delayedLockUsersToLock.size() - 1; j >= 0; --j) {
++                int delayedLockUserId = delayedLockUsersToLock.keyAt(j);
++                userIds.add(delayedLockUserId);
+             }
+         }
+         return userIds.toArray();
+-- 
+2.43.0
+

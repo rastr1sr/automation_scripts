@@ -1,0 +1,27 @@
+From f6cf0406a20f5430e0ebd7d8c5314fb18535d60a Mon Sep 17 00:00:00 2001
+From: maade93791 <70593890+maade69@users.noreply.github.com>
+Date: Mon, 22 Jul 2024 00:34:40 +0300
+Subject: [PATCH] don't handle auto-reboot when running in microdroid VM
+
+---
+ init/property_service.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/init/property_service.cpp b/init/property_service.cpp
+index 6ec5c5082..320dc13be 100644
+--- a/init/property_service.cpp
++++ b/init/property_service.cpp
+@@ -1573,7 +1573,9 @@ static void PropertyServiceThread(int fd, bool listen_init) {
+         }
+     }
+ 
+-    auto_reboot_timer_init();
++    if (!IsMicrodroid()) {
++        auto_reboot_timer_init();
++    }
+ 
+     while (true) {
+         auto epoll_result = epoll.Wait(std::nullopt);
+-- 
+2.43.0
+

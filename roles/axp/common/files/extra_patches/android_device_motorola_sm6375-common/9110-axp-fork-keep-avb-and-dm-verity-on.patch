@@ -1,0 +1,30 @@
+From 564738df1e18831e99c9f7b4bd79deef59f060ff Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Fri, 16 Oct 2026 02:11:14 +0000
+Subject: [PATCH] sm6375-common: keep verified boot and dm-verity enabled
+
+Drop --flags 3 (disable verity + verification) from vbmeta. AXP signs vbmeta with its own
+AVB key; with the bootloader unlocked the device still boots (orange state), but system,
+system_ext, product and vendor are now verified by dm-verity at runtime.
+Recovery: fastboot --disable-verity --disable-verification flash vbmeta vbmeta.img
+---
+ BoardConfigCommon.mk | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/BoardConfigCommon.mk b/BoardConfigCommon.mk
+index 905be1a..33c8de8 100644
+--- a/BoardConfigCommon.mk
++++ b/BoardConfigCommon.mk
+@@ -149,7 +149,8 @@ BOARD_VENDOR_SEPOLICY_DIRS += $(COMMON_PATH)/sepolicy/vendor
+ 
+ # Verified Boot
+ BOARD_AVB_ENABLE := true
+-BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS += --flags 3
++# AXP fork: keep AVB verification + dm-verity on (vbmeta is signed with the AXP AVB key)
++# BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS += --flags 3
+ BOARD_AVB_VBMETA_SYSTEM := system system_ext product
+ BOARD_AVB_VBMETA_SYSTEM_KEY_PATH := external/avb/test/data/testkey_rsa2048.pem
+ BOARD_AVB_VBMETA_SYSTEM_ALGORITHM := SHA256_RSA2048
+-- 
+2.43.0
+

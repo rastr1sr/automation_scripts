@@ -1,0 +1,104 @@
+From 4499ae8b211a2dec1f064aecd79b742618f19132 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Fri, 3 Jan 2025 12:38:28 +0200
+Subject: [PATCH] SystemUI: don't skip fingerprint auth success haptic when 2FA
+ is on
+
+---
+ .../DeviceEntryHapticsInteractor.kt           | 31 ++++++++++++++++++-
+ .../DeviceEntryHapticsInteractorKosmos.kt     |  2 ++
+ 2 files changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractor.kt b/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractor.kt
+index 41a59a959..d107020cc 100644
+--- a/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractor.kt
+@@ -15,6 +15,10 @@
+  */
+ package com.android.systemui.deviceentry.domain.interactor
+ 
++import android.hardware.biometrics.BiometricSourceType
++import android.util.Log
++import com.android.keyguard.KeyguardUpdateMonitor
++import com.android.keyguard.KeyguardUpdateMonitorCallback
+ import com.android.keyguard.logging.BiometricUnlockLogger
+ import com.android.systemui.biometrics.data.repository.FingerprintPropertyRepository
+ import com.android.systemui.biometrics.shared.model.FingerprintSensorType
+@@ -29,7 +33,9 @@ import com.android.systemui.util.kotlin.sample
+ import com.android.systemui.util.time.SystemClock
+ import javax.inject.Inject
+ import kotlinx.coroutines.ExperimentalCoroutinesApi
++import kotlinx.coroutines.channels.awaitClose
+ import kotlinx.coroutines.flow.Flow
++import kotlinx.coroutines.flow.callbackFlow
+ import kotlinx.coroutines.flow.combine
+ import kotlinx.coroutines.flow.combineTransform
+ import kotlinx.coroutines.flow.distinctUntilChanged
+@@ -56,6 +62,7 @@ constructor(
+     keyEventInteractor: KeyEventInteractor,
+     private val logger: BiometricUnlockLogger,
+     powerInteractor: PowerInteractor,
++    keyguardUpdateMonitor: KeyguardUpdateMonitor,
+     private val systemClock: SystemClock,
+     dumpManager: DumpManager,
+ ) : FlowDumperImpl(dumpManager) {
+@@ -82,7 +89,7 @@ constructor(
+                 emit(recentPowerButtonPressThresholdMs * -1L - 1L)
+             }
+ 
+-    val playSuccessHaptic: Flow<Unit> =
++    val playSuccessHaptic: Flow<Unit> = merge(
+         deviceEntrySourceInteractor.deviceEntryFromBiometricSource
+             .sample(
+                 combine(
+@@ -106,6 +113,28 @@ constructor(
+             // map to Unit
+             .map {}
+             .dumpWhileCollecting("playSuccessHaptic")
++            , // merge with callbackFlow below
++            callbackFlow {
++                    val callback =
++                        object : KeyguardUpdateMonitorCallback() {
++                            override fun onBiometricAuthenticated(
++                                userId: Int,
++                                biometricSourceType: BiometricSourceType,
++                                isStrongBiometric: Boolean,
++                                secondFactorStatus: SecondFactorStatus,
++                            ) {
++                                if (secondFactorStatus == SecondFactorStatus.Enabled) {
++                                    if (!trySend(Unit).isSuccess) {
++                                        Log.w("DeviceEntryHapticsInteractor",
++                                            "playSuccessHaptic: !trySend failed")
++                                    }
++                                    return
++                                }
++                            }
++                        }
++                keyguardUpdateMonitor.registerCallback(callback)
++                awaitClose { keyguardUpdateMonitor.removeCallback(callback) }
++            })
+ 
+     private val playErrorHapticForBiometricFailure: Flow<Unit> =
+         merge(
+diff --git a/packages/SystemUI/tests/utils/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorKosmos.kt b/packages/SystemUI/tests/utils/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorKosmos.kt
+index 2a7e3e903..c3b922b36 100644
+--- a/packages/SystemUI/tests/utils/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorKosmos.kt
++++ b/packages/SystemUI/tests/utils/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorKosmos.kt
+@@ -18,6 +18,7 @@
+ 
+ package com.android.systemui.deviceentry.domain.interactor
+ 
++import com.android.keyguard.keyguardUpdateMonitor
+ import com.android.keyguard.logging.biometricUnlockLogger
+ import com.android.systemui.biometrics.data.repository.fingerprintPropertyRepository
+ import com.android.systemui.dump.dumpManager
+@@ -42,5 +43,6 @@ val Kosmos.deviceEntryHapticsInteractor by
+             powerInteractor = powerInteractor,
+             systemClock = systemClock,
+             dumpManager = dumpManager,
++            keyguardUpdateMonitor = keyguardUpdateMonitor,
+         )
+     }
+-- 
+2.43.0
+

@@ -1,0 +1,85 @@
+From 166fceea810a6643480f6d42381d95f900a21be8 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Fri, 16 Oct 2026 02:10:58 +0000
+Subject: [PATCH] auto-reboot through init (GrapheneOS), 18h default
+
+Arms init's alarm timer (sys.auto_reboot_ctl) when the keyguard shows and disarms it on unlock,
+so the reboot can no longer be stopped by killing SystemUI. Reuses AXP's
+SETTINGS_REBOOT_AFTER_TIMEOUT and stores an 18h default on fresh installs.
+Based on GrapheneOS b7449e5fcbf4.
+---
+ .../server/policy/keyguard/AutoReboot.java    | 49 +++++++++++++++++++
+ .../policy/keyguard/KeyguardStateMonitor.java |  1 +
+ 2 files changed, 50 insertions(+)
+ create mode 100644 services/core/java/com/android/server/policy/keyguard/AutoReboot.java
+
+diff --git a/services/core/java/com/android/server/policy/keyguard/AutoReboot.java b/services/core/java/com/android/server/policy/keyguard/AutoReboot.java
+new file mode 100644
+index 000000000..1eb46e52f
+--- /dev/null
++++ b/services/core/java/com/android/server/policy/keyguard/AutoReboot.java
+@@ -0,0 +1,49 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.server.policy.keyguard;
++
++import android.content.Context;
++import android.os.SystemProperties;
++import android.provider.Settings;
++import android.util.Slog;
++
++/**
++ * Auto-reboot via init (GrapheneOS b7449e5fcbf4, adapted for AXP.OS).
++ *
++ * init owns a CLOCK_BOOTTIME_ALARM timer (see system/core property_service.cpp): it is armed when
++ * the keyguard shows, disarmed on unlock, and cannot be extended once armed, so killing or
++ * compromising SystemUI/system_server after locking does not stop the reboot. Uses AXP's existing
++ * Settings.Global.SETTINGS_REBOOT_AFTER_TIMEOUT (milliseconds, 0 = off).
++ *
++ * @hide
++ */
++class AutoReboot {
++    private static final String TAG = AutoReboot.class.getSimpleName();
++
++    // writes to this system property are special-cased in init
++    private static final String SYS_PROP = "sys.auto_reboot_ctl";
++
++    // AXP fork: default for fresh installs (GrapheneOS uses 18 hours too)
++    private static final long DEFAULT_TIMEOUT_MS = 18L * 60 * 60 * 1000;
++
++    static void onKeyguardShowingStateChanged(Context ctx, boolean showing, int userId) {
++        if (!showing) {
++            SystemProperties.set(SYS_PROP, "on_device_unlocked");
++            return;
++        }
++
++        final String key = Settings.Global.SETTINGS_REBOOT_AFTER_TIMEOUT;
++        // store the default once, so Settings and the SystemUI timer show the same value
++        if (Settings.Global.getString(ctx.getContentResolver(), key) == null) {
++            Settings.Global.putLong(ctx.getContentResolver(), key, DEFAULT_TIMEOUT_MS);
++        }
++        final long timeoutMillis = Settings.Global.getLong(ctx.getContentResolver(), key, 0);
++        final long timeoutSeconds = timeoutMillis / 1000;
++        if (timeoutSeconds > 0 && timeoutSeconds <= Integer.MAX_VALUE) {
++            SystemProperties.set(SYS_PROP, Long.toString(timeoutSeconds));
++        }
++        Slog.d(TAG, "showing, timeoutSeconds: " + timeoutSeconds);
++    }
++}
+diff --git a/services/core/java/com/android/server/policy/keyguard/KeyguardStateMonitor.java b/services/core/java/com/android/server/policy/keyguard/KeyguardStateMonitor.java
+index c8ff6c7ee..aa784e026 100644
+--- a/services/core/java/com/android/server/policy/keyguard/KeyguardStateMonitor.java
++++ b/services/core/java/com/android/server/policy/keyguard/KeyguardStateMonitor.java
+@@ -92,6 +92,7 @@ public class KeyguardStateMonitor extends IKeyguardStateCallback.Stub {
+ 
+         mIsShowing = showing;
+         updateDenyNewUsb();
++        AutoReboot.onKeyguardShowingStateChanged(mContext, showing, userId);
+ 
+         mCallback.onShowingChanged();
+ 
+-- 
+2.43.0
+

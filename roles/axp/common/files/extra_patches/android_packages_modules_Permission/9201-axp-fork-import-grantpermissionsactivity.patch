@@ -1,0 +1,25 @@
+From 2ab743e02bfec683122bac7893aea8236d557a83 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Fri, 16 Oct 2026 06:51:41 +0000
+Subject: [PATCH] PermissionController: import GrantPermissionsActivity for the
+ delayed Allow buttons port
+
+---
+ .../permission/ui/handheld/GrantPermissionsViewHandlerImpl.kt    | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/PermissionController/src/com/android/permissioncontroller/permission/ui/handheld/GrantPermissionsViewHandlerImpl.kt b/PermissionController/src/com/android/permissioncontroller/permission/ui/handheld/GrantPermissionsViewHandlerImpl.kt
+index d65a0ea..e5d0cd1 100644
+--- a/PermissionController/src/com/android/permissioncontroller/permission/ui/handheld/GrantPermissionsViewHandlerImpl.kt
++++ b/PermissionController/src/com/android/permissioncontroller/permission/ui/handheld/GrantPermissionsViewHandlerImpl.kt
+@@ -47,6 +47,7 @@ import com.airbnb.lottie.LottieCompositionFactory
+ import com.airbnb.lottie.LottieDrawable
+ import com.android.modules.utils.build.SdkLevel
+ import com.android.permissioncontroller.R
++import com.android.permissioncontroller.permission.ui.GrantPermissionsActivity
+ import com.android.permissioncontroller.permission.ui.GrantPermissionsActivity.ALLOW_ALL_BUTTON
+ import com.android.permissioncontroller.permission.ui.GrantPermissionsActivity.ALLOW_ALWAYS_BUTTON
+ import com.android.permissioncontroller.permission.ui.GrantPermissionsActivity.ALLOW_BUTTON
+-- 
+2.43.0
+

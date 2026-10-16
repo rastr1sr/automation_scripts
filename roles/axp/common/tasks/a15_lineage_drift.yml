@@ -31,7 +31,9 @@
       while read d h; do
         [ -d "$d" ] || continue
         r=$(git -C "$d" remote | head -1)
-        git -C "$d" cat-file -e "$h^{commit}" 2>/dev/null || git -C "$d" fetch -q --depth=2 "$r" "$h"
+        # need the commit AND its parent (git revert diffs against it); a shallow sync can leave the
+        # commit at the shallow boundary without its parent
+        { git -C "$d" cat-file -e "$h^{commit}" && git -C "$d" cat-file -e "$h~1^{commit}"; } 2>/dev/null           || git -C "$d" fetch -q --depth=2 "$r" "$h"
         git -C "$d" update-ref "refs/axp-keep/$h" "$h"
         echo "pinned $d $h"
       done < /tmp/axp_hashes.txt

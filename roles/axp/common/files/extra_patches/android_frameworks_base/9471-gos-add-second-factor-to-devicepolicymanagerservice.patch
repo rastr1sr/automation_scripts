@@ -1,4 +1,4 @@
-From 4a8b5a9e572e0563fca971d56a422fe448286191 Mon Sep 17 00:00:00 2001
+From 63e88c719391203c2ac7f045c69d835f66ca52d0 Mon Sep 17 00:00:00 2001
 From: Fred Underwood <underwoodfred@proton.me>
 Date: Sat, 21 Dec 2024 16:25:15 +1000
 Subject: [PATCH] add second factor to DevicePolicyManagerService
@@ -12,7 +12,7 @@ Subject: [PATCH] add second factor to DevicePolicyManagerService
  5 files changed, 426 insertions(+), 36 deletions(-)
 
 diff --git a/core/java/android/app/admin/DevicePolicyManager.java b/core/java/android/app/admin/DevicePolicyManager.java
-index ff83fa71a..2a894eae0 100644
+index a967ca2fa..5c552cf1f 100644
 --- a/core/java/android/app/admin/DevicePolicyManager.java
 +++ b/core/java/android/app/admin/DevicePolicyManager.java
 @@ -66,6 +66,7 @@ import static android.net.NetworkCapabilities.NET_ENTERPRISE_ID_1;

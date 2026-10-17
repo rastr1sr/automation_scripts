@@ -1,0 +1,36 @@
+From 9585bc7cfc4e26cc9a88d629bafed5eb9ecdf9f4 Mon Sep 17 00:00:00 2001
+From: Fred Underwood <underwoodfred@proton.me>
+Date: Sat, 21 Dec 2024 17:03:36 +1000
+Subject: [PATCH] add biometric keyguard settings to LPU
+
+---
+ .../android/internal/widget/LockPatternUtils.java | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/core/java/com/android/internal/widget/LockPatternUtils.java b/core/java/com/android/internal/widget/LockPatternUtils.java
+index 2ae13ce2d..2a2cf3181 100644
+--- a/core/java/com/android/internal/widget/LockPatternUtils.java
++++ b/core/java/com/android/internal/widget/LockPatternUtils.java
+@@ -2124,4 +2124,19 @@ public class LockPatternUtils {
+             throw e.rethrowFromSystemServer();
+         }
+     }
++
++    public static final int BIOMETRIC_KEYGUARD_ON = 1;
++    public static final int BIOMETRIC_KEYGUARD_OFF = 0;
++    public static final int BIOMETRIC_KEYGUARD_DEFAULT = BIOMETRIC_KEYGUARD_ON;
++    public boolean isBiometricKeyguardEnabled(int userId) {
++        return Settings.Secure.getIntForUser(mContext.getContentResolver(),
++                Settings.Secure.BIOMETRIC_KEYGUARD_ENABLED, BIOMETRIC_KEYGUARD_DEFAULT, userId)
++                == BIOMETRIC_KEYGUARD_ON;
++    }
++
++    public boolean setBiometricKeyguardEnabled(int userId, boolean enabled) {
++        return Settings.Secure.putIntForUser(mContext.getContentResolver(),
++                Settings.Secure.BIOMETRIC_KEYGUARD_ENABLED, enabled ? BIOMETRIC_KEYGUARD_ON :
++                        BIOMETRIC_KEYGUARD_OFF, userId);
++    }
+ }
+-- 
+2.43.0
+

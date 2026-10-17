@@ -1,0 +1,27 @@
+From c841c38c684bbec42ff68c5f3484969d95a97631 Mon Sep 17 00:00:00 2001
+From: Fred Underwood <underwoodfred@proton.me>
+Date: Sun, 22 Dec 2024 06:55:23 +1000
+Subject: [PATCH] throw Exception to notify of SceneContainerFlag
+
+---
+ .../android/keyguard/KeyguardSecurityContainerController.java | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java
+index 6c718644d..8b1a5e65d 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java
+@@ -531,6 +531,10 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+         showPrimarySecurityScreen(false);
+ 
+         if (SceneContainerFlag.isEnabled()) {
++            if (true) {
++                throw new IllegalStateException(
++                        "Compose bouncer support has not been added to Graphene's MFA!");
++            }
+             // When the scene framework says that the lockscreen has been dismissed, dismiss the
+             // keyguard here, revealing the underlying app or launcher:
+             mSceneTransitionCollectionJob = mJavaAdapter.get().alwaysCollectFlow(
+-- 
+2.43.0
+

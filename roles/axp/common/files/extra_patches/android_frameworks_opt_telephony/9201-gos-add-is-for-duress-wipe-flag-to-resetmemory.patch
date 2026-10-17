@@ -1,0 +1,49 @@
+From 12458910d24878d79e8604ab2f1fba86f0a6b907 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Thu, 30 May 2024 16:48:37 +0300
+Subject: [PATCH] add IS_FOR_DURESS_WIPE flag to
+ EuiccCardController.resetMemory()
+
+---
+ .../telephony/euicc/EuiccCardController.java    | 17 +++++++++++++----
+ 1 file changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/src/java/com/android/internal/telephony/euicc/EuiccCardController.java b/src/java/com/android/internal/telephony/euicc/EuiccCardController.java
+index 9e13182b3c..45dd99c2d4 100644
+--- a/src/java/com/android/internal/telephony/euicc/EuiccCardController.java
++++ b/src/java/com/android/internal/telephony/euicc/EuiccCardController.java
+@@ -708,8 +708,11 @@ public class EuiccCardController extends IEuiccCardController.Stub {
+ 
+     @Override
+     public void resetMemory(String callingPackage, String cardId,
+-            @EuiccCardManager.ResetOption int options, IResetMemoryCallback callback) {
++            @EuiccCardManager.ResetOption int options, IResetMemoryCallback callback, int flags) {
+         if (Binder.getCallingUid() != Process.SYSTEM_UID) {
++            if (flags != 0) {
++                throw new SecurityException("only SYSTEM_UID is allowed to use flags");
++            }
+             try {
+                 checkCallingPackage(callingPackage);
+             } catch (SecurityException se) {
+@@ -737,9 +740,15 @@ public class EuiccCardController extends IEuiccCardController.Stub {
+         AsyncResultCallback<Void> cardCb = new AsyncResultCallback<Void>() {
+             @Override
+             public void onResult(Void result) {
+-                Log.i(TAG, "Request subscription info list refresh after reset memory.");
+-                SubscriptionManagerService.getInstance().updateEmbeddedSubscriptions(
+-                        List.of(mUiccController.convertToPublicCardId(cardId)), null);
++                if ((flags & EuiccCardManager.RESET_FLAG_IS_FOR_DURESS_WIPE) == 0) {
++                    // if eUICC LPA is present, then updateEmbeddedSubscriptions() notifies it
++                    // to send eSIM removal notification to the carrier, which is undesirable
++                    // when a duress wipe is being performed
++                    Log.i(TAG, "Request subscription info list refresh after reset memory.");
++                    SubscriptionManagerService.getInstance().updateEmbeddedSubscriptions(
++                            List.of(mUiccController.convertToPublicCardId(cardId)), null);
++                }
++
+                 try {
+                     callback.onComplete(EuiccCardManager.RESULT_OK);
+                 } catch (RemoteException exception) {
+-- 
+2.43.0
+

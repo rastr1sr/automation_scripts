@@ -1,4 +1,4 @@
-From 7146bbce030f8dfa589c90a8b17926e745cbb8dc Mon Sep 17 00:00:00 2001
+From 28ca732c50cda913ebc82e54410d2b6a6dbefc8c Mon Sep 17 00:00:00 2001
 From: Fred Underwood <underwoodfred@proton.me>
 Date: Sun, 22 Dec 2024 06:34:24 +1000
 Subject: [PATCH] add second factor to FingerprintService

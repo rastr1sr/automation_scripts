@@ -1,4 +1,4 @@
-From 82d508fbb639324136a287dcf9f43a5df91d9a9a Mon Sep 17 00:00:00 2001
+From 1d311b6dca6192f754b884a5b3dceeff9236cb62 Mon Sep 17 00:00:00 2001
 From: Fred Underwood <underwoodfred@proton.me>
 Date: Sat, 21 Dec 2024 16:43:01 +1000
 Subject: [PATCH] add second factor to LockSettingsStateListener

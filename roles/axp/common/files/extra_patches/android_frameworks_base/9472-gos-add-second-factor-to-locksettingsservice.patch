@@ -1,4 +1,4 @@
-From 82ffec40f643eaaf95096075910332cc6212993f Mon Sep 17 00:00:00 2001
+From 2f999a0298e216cf28d848834683e4565124a120 Mon Sep 17 00:00:00 2001
 From: Fred Underwood <underwoodfred@proton.me>
 Date: Sat, 21 Dec 2024 16:40:05 +1000
 Subject: [PATCH] add second factor to LockSettingsService
@@ -56,10 +56,10 @@ index 701fb859b..ce3b0d64f 100644
      void setSeparateProfileChallengeEnabled(int userId, boolean enabled, in LockscreenCredential managedUserPassword);
      boolean getSeparateProfileChallengeEnabled(int userId);
 diff --git a/core/java/com/android/internal/widget/LockPatternUtils.java b/core/java/com/android/internal/widget/LockPatternUtils.java
-index 8f07f08ff..a0333b75e 100644
+index 9ef9b2cc8..2ae13ce2d 100644
 --- a/core/java/com/android/internal/widget/LockPatternUtils.java
 +++ b/core/java/com/android/internal/widget/LockPatternUtils.java
-@@ -221,7 +221,7 @@ public class LockPatternUtils {
+@@ -218,7 +218,7 @@ public class LockPatternUtils {
  
      public static final String AUTO_PIN_CONFIRM = "lockscreen.auto_pin_confirm";
  

@@ -1,0 +1,568 @@
+From 6f2248cddd2797d100a105cbc0f1efce63dfa7c2 Mon Sep 17 00:00:00 2001
+From: Fred Underwood <underwoodfred@proton.me>
+Date: Mon, 23 Dec 2024 05:58:42 +1000
+Subject: [PATCH] append "Safe" to risky upstream method names
+
+Some upstream methods are used to check if unlocking is possible when it
+is known that a biometric auth has succeeded, but they don't and can't
+take into account biometric second factor. Renaming these methods gives
+us build errors for future callers, so we can make sure they are safe.
+---
+ .../biometrics/BiometricTestExtensions.kt     |  2 +-
+ .../DeviceEntryHapticsInteractorTest.kt       |  4 +--
+ .../DeviceEntrySourceInteractorTest.kt        |  2 +-
+ ...DeviceEntrySideFpsOverlayInteractorTest.kt |  4 +--
+ .../keyguard/util/IndicationHelperTest.kt     |  4 +--
+ .../startable/SceneContainerStartableTest.kt  |  2 +-
+ .../KeyguardIndicationControllerBaseTest.java |  2 +-
+ .../KeyguardIndicationControllerTest.java     |  4 +--
+ .../phone/BiometricsUnlockControllerTest.java | 34 +++++++++----------
+ .../keyguard/KeyguardUpdateMonitor.java       | 33 +++++++++++-------
+ .../interactor/DeviceEntrySourceInteractor.kt |  4 +--
+ .../DeviceEntrySideFpsOverlayInteractor.kt    |  2 +-
+ .../keyguard/util/IndicationHelper.kt         |  2 +-
+ .../KeyguardIndicationController.java         |  4 +--
+ .../phone/BiometricUnlockController.java      |  2 +-
+ .../keyguard/KeyguardUpdateMonitorTest.java   | 16 ++++-----
+ 16 files changed, 64 insertions(+), 57 deletions(-)
+
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/biometrics/BiometricTestExtensions.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/biometrics/BiometricTestExtensions.kt
+index 194b41fbe..41bbf9493 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/biometrics/BiometricTestExtensions.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/biometrics/BiometricTestExtensions.kt
+@@ -216,7 +216,7 @@ internal fun updatePrimaryBouncer(
+ 
+     whenever(kosmos.keyguardUpdateMonitor.isFingerprintDetectionRunning)
+         .thenReturn(fpsDetectionRunning)
+-    whenever(kosmos.keyguardUpdateMonitor.isUnlockingWithFingerprintAllowed)
++    whenever(kosmos.keyguardUpdateMonitor.isUnlockingWithFingerprintAllowedSafe)
+         .thenReturn(isUnlockingWithFpAllowed)
+     mContext.orCreateTestableResources.addOverride(R.bool.config_show_sidefps_hint_on_bouncer, true)
+ }
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorTest.kt
+index 20d66155e..10a8f010c 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorTest.kt
+@@ -82,13 +82,13 @@ class DeviceEntryHapticsInteractorTest : SysuiTestCase() {
+         if (SceneContainerFlag.isEnabled) {
+             whenever(kosmos.authController.isUdfpsFingerDown).thenReturn(false)
+             whenever(kosmos.dozeScrimController.isPulsing).thenReturn(false)
+-            whenever(kosmos.keyguardUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean()))
++            whenever(kosmos.keyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean()))
+                 .thenReturn(true)
+             whenever(kosmos.screenOffAnimationController.isKeyguardShowDelayed()).thenReturn(false)
+ 
+             // Dependencies for DeviceEntrySourceInteractor#biometricUnlockStateOnKeyguardDismissed
+             whenever(kosmos.keyguardUpdateMonitor.isDeviceInteractive).thenReturn(true)
+-            whenever(kosmos.keyguardUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean()))
++            whenever(kosmos.keyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean()))
+                 .thenReturn(true)
+ 
+             // Mock authenticationMethodIsSecure true
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntrySourceInteractorTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntrySourceInteractorTest.kt
+index b3c891dc9..e63159bcb 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntrySourceInteractorTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntrySourceInteractorTest.kt
+@@ -75,7 +75,7 @@ class DeviceEntrySourceInteractorTest : SysuiTestCase() {
+         if (SceneContainerFlag.isEnabled) {
+             whenever(kosmos.authController.isUdfpsFingerDown).thenReturn(false)
+             whenever(kosmos.dozeScrimController.isPulsing).thenReturn(false)
+-            whenever(kosmos.keyguardUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean()))
++            whenever(kosmos.keyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean()))
+                 .thenReturn(true)
+             whenever(kosmos.screenOffAnimationController.isKeyguardShowDelayed()).thenReturn(false)
+             kosmos.fakeAuthenticationRepository.setAuthenticationMethod(
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/domain/interactor/DeviceEntrySideFpsOverlayInteractorTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/domain/interactor/DeviceEntrySideFpsOverlayInteractorTest.kt
+index b5ea30554..633e64eb8 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/domain/interactor/DeviceEntrySideFpsOverlayInteractorTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/domain/interactor/DeviceEntrySideFpsOverlayInteractorTest.kt
+@@ -343,7 +343,7 @@ class DeviceEntrySideFpsOverlayInteractorTest : SysuiTestCase() {
+ 
+         whenever(keyguardUpdateMonitor.isFingerprintDetectionRunning)
+             .thenReturn(fpsDetectionRunning)
+-        whenever(keyguardUpdateMonitor.isUnlockingWithFingerprintAllowed)
++        whenever(keyguardUpdateMonitor.isUnlockingWithFingerprintAllowedSafe)
+             .thenReturn(isUnlockingWithFpAllowed)
+         mContext.orCreateTestableResources.addOverride(
+             R.bool.config_show_sidefps_hint_on_bouncer,
+@@ -363,7 +363,7 @@ class DeviceEntrySideFpsOverlayInteractorTest : SysuiTestCase() {
+ 
+         whenever(keyguardUpdateMonitor.isFingerprintDetectionRunning)
+             .thenReturn(fpsDetectionRunning)
+-        whenever(keyguardUpdateMonitor.isUnlockingWithFingerprintAllowed)
++        whenever(keyguardUpdateMonitor.isUnlockingWithFingerprintAllowedSafe)
+             .thenReturn(isUnlockingWithFpAllowed)
+         mContext.orCreateTestableResources.addOverride(
+             R.bool.config_show_sidefps_hint_on_bouncer,
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/util/IndicationHelperTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/util/IndicationHelperTest.kt
+index fd0ff9b38..1019f0504 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/util/IndicationHelperTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/util/IndicationHelperTest.kt
+@@ -162,12 +162,12 @@ class IndicationHelperTest : SysuiTestCase() {
+     }
+ 
+     private fun givenPrimaryAuthNotRequired() {
+-        whenever(keyguardUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean()))
++        whenever(keyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean()))
+             .thenReturn(true)
+     }
+ 
+     private fun givenPrimaryAuthRequired() {
+-        whenever(keyguardUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean()))
++        whenever(keyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean()))
+             .thenReturn(false)
+     }
+ }
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/scene/domain/startable/SceneContainerStartableTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/scene/domain/startable/SceneContainerStartableTest.kt
+index 79bb0c401..8d93a2550 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/scene/domain/startable/SceneContainerStartableTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/scene/domain/startable/SceneContainerStartableTest.kt
+@@ -174,7 +174,7 @@ class SceneContainerStartableTest : SysuiTestCase() {
+     @Before
+     fun setUp() {
+         MockitoAnnotations.initMocks(this)
+-        whenever(kosmos.keyguardUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean()))
++        whenever(kosmos.keyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean()))
+             .thenReturn(true)
+         underTest = kosmos.sceneContainerStartable
+     }
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/KeyguardIndicationControllerBaseTest.java b/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/KeyguardIndicationControllerBaseTest.java
+index 33a08035a..a4c07c2fc 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/KeyguardIndicationControllerBaseTest.java
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/KeyguardIndicationControllerBaseTest.java
+@@ -225,7 +225,7 @@ public class KeyguardIndicationControllerBaseTest extends SysuiTestCase {
+         mFinancedDisclosureWithOrganization = mContext.getString(
+                 R.string.do_financed_disclosure_with_name, ORGANIZATION_NAME);
+ 
+-        when(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         when(mScreenLifecycle.getScreenState()).thenReturn(SCREEN_ON);
+         when(mKeyguardUpdateMonitor.isUserUnlocked(anyInt())).thenReturn(true);
+ 
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/KeyguardIndicationControllerTest.java b/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/KeyguardIndicationControllerTest.java
+index 32a9f544a..cba5a3fa4 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/KeyguardIndicationControllerTest.java
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/KeyguardIndicationControllerTest.java
+@@ -457,7 +457,7 @@ public class KeyguardIndicationControllerTest extends KeyguardIndicationControll
+ 
+         // GIVEN unlocking with fingerprint is possible but not allowed
+         setupFingerprintUnlockPossible(true);
+-        when(mKeyguardUpdateMonitor.isUnlockingWithFingerprintAllowed())
++        when(mKeyguardUpdateMonitor.isUnlockingWithFingerprintAllowedSafe())
+                 .thenReturn(false);
+ 
+         String message = "A message";
+@@ -1646,7 +1646,7 @@ public class KeyguardIndicationControllerTest extends KeyguardIndicationControll
+ 
+     private void fingerprintUnlockIsPossibleAndAllowed() {
+         setupFingerprintUnlockPossible(true);
+-        when(mKeyguardUpdateMonitor.isUnlockingWithFingerprintAllowed()).thenReturn(true);
++        when(mKeyguardUpdateMonitor.isUnlockingWithFingerprintAllowedSafe()).thenReturn(true);
+     }
+ 
+     private void setupFingerprintUnlockPossible(boolean possible) {
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/phone/BiometricsUnlockControllerTest.java b/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/phone/BiometricsUnlockControllerTest.java
+index 9eafcdbad..a09d14d04 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/phone/BiometricsUnlockControllerTest.java
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/phone/BiometricsUnlockControllerTest.java
+@@ -181,7 +181,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+ 
+     @Test
+     public void onBiometricAuthenticated_fingerprintAndBiometricsDisallowed_showPrimaryBouncer() {
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(true /* isStrongBiometric */))
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(true /* isStrongBiometric */))
+                 .thenReturn(false);
+         mBiometricUnlockController.onBiometricAuthenticated(UserHandle.USER_CURRENT,
+                 BiometricSourceType.FINGERPRINT, true /* isStrongBiometric */);
+@@ -193,7 +193,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+ 
+     @Test
+     public void onBiometricAuthenticated_fingerprint_nonStrongBioDisallowed_showPrimaryBouncer() {
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(false /* isStrongBiometric */))
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(false /* isStrongBiometric */))
+                 .thenReturn(false);
+         mBiometricUnlockController.onBiometricAuthenticated(UserHandle.USER_CURRENT,
+                 BiometricSourceType.FINGERPRINT, false /* isStrongBiometric */);
+@@ -209,7 +209,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+         reset(mUpdateMonitor);
+         reset(mStatusBarKeyguardViewManager);
+         when(mKeyguardStateController.isShowing()).thenReturn(true);
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         when(mDozeScrimController.isPulsing()).thenReturn(true);
+         // the value of isStrongBiometric doesn't matter here since we only care about the returned
+         // value of isUnlockingWithBiometricAllowed()
+@@ -227,7 +227,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+         reset(mStatusBarKeyguardViewManager);
+         when(mKeyguardStateController.isShowing()).thenReturn(false);
+         when(mKeyguardStateController.isUnlocked()).thenReturn(true);
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         when(mDozeScrimController.isPulsing()).thenReturn(false);
+         // the value of isStrongBiometric doesn't matter here since we only care about the returned
+         // value of isUnlockingWithBiometricAllowed()
+@@ -241,7 +241,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+ 
+     @Test
+     public void onBiometricAuthenticated_whenFingerprint_notifyKeyguardAuthenticated() {
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         // the value of isStrongBiometric doesn't matter here since we only care about the returned
+         // value of isUnlockingWithBiometricAllowed()
+         mBiometricUnlockController.onBiometricAuthenticated(UserHandle.USER_CURRENT,
+@@ -255,7 +255,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+ 
+     @Test
+     public void onBiometricAuthenticated_whenFingerprintOnBouncer_dismissBouncer() {
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         when(mStatusBarKeyguardViewManager.primaryBouncerIsOrWillBeShowing()).thenReturn(true);
+         // the value of isStrongBiometric doesn't matter here since we only care about the returned
+         // value of isUnlockingWithBiometricAllowed()
+@@ -269,7 +269,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+ 
+     @Test
+     public void onBiometricAuthenticated_whenFace_dontDismissKeyguard() {
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         // the value of isStrongBiometric doesn't matter here since we only care about the returned
+         // value of isUnlockingWithBiometricAllowed()
+         mBiometricUnlockController.onBiometricAuthenticated(UserHandle.USER_CURRENT,
+@@ -285,7 +285,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+         when(mKeyguardBypassController.getBypassEnabled()).thenReturn(true);
+         mBiometricUnlockController.setKeyguardViewController(mStatusBarKeyguardViewManager);
+ 
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         // the value of isStrongBiometric doesn't matter here since we only care about the returned
+         // value of isUnlockingWithBiometricAllowed()
+         mBiometricUnlockController.onBiometricAuthenticated(UserHandle.USER_CURRENT,
+@@ -302,7 +302,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+         when(mAuthController.isUdfpsFingerDown()).thenReturn(true);
+         mBiometricUnlockController.setKeyguardViewController(mStatusBarKeyguardViewManager);
+ 
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         // the value of isStrongBiometric doesn't matter here since we only care about the returned
+         // value of isUnlockingWithBiometricAllowed()
+         mBiometricUnlockController.onBiometricAuthenticated(UserHandle.USER_CURRENT,
+@@ -320,7 +320,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+         when(mKeyguardBypassController.getBypassEnabled()).thenReturn(true);
+         mBiometricUnlockController.setKeyguardViewController(mStatusBarKeyguardViewManager);
+ 
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(false);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(false);
+         // the value of isStrongBiometric doesn't matter here since we only care about the returned
+         // value of isUnlockingWithBiometricAllowed()
+         mBiometricUnlockController.onBiometricAuthenticated(UserHandle.USER_CURRENT,
+@@ -352,7 +352,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+         when(mUpdateMonitor.getStrongAuthTracker()).thenReturn(mStrongAuthTracker);
+         mBiometricUnlockController.setKeyguardViewController(mStatusBarKeyguardViewManager);
+ 
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(false);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(false);
+         // the value of isStrongBiometric doesn't matter here since we only care about the returned
+         // value of isUnlockingWithBiometricAllowed()
+         mBiometricUnlockController.onBiometricAuthenticated(UserHandle.USER_CURRENT,
+@@ -365,7 +365,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+ 
+     @Test
+     public void onBiometricAuthenticated_whenFaceOnBouncer_dismissBouncer() {
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         when(mStatusBarKeyguardViewManager.primaryBouncerIsOrWillBeShowing()).thenReturn(true);
+         // the value of isStrongBiometric doesn't matter here since we only care about the returned
+         // value of isUnlockingWithBiometricAllowed()
+@@ -381,7 +381,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+ 
+     @Test
+     public void onBiometricAuthenticated_whenFaceOnAlternateBouncer_dismissBouncer() {
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         when(mStatusBarKeyguardViewManager.primaryBouncerIsOrWillBeShowing()).thenReturn(false);
+         when(mKeyguardTransitionInteractor.getCurrentState())
+                 .thenReturn(KeyguardState.ALTERNATE_BOUNCER);
+@@ -400,7 +400,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+     @Test
+     public void onBiometricAuthenticated_whenBypassOnBouncer_dismissBouncer() {
+         reset(mKeyguardBypassController);
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         when(mKeyguardBypassController.getBypassEnabled()).thenReturn(true);
+         when(mKeyguardBypassController.onBiometricAuthenticated(any(), anyBoolean()))
+                 .thenReturn(true);
+@@ -419,7 +419,7 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+     public void onBiometricAuthenticated_whenFaceAndPulsing_dontDismissKeyguard() {
+         reset(mUpdateMonitor);
+         reset(mStatusBarKeyguardViewManager);
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         when(mDozeScrimController.isPulsing()).thenReturn(true);
+         // the value of isStrongBiometric doesn't matter here since we only care about the returned
+         // value of isUnlockingWithBiometricAllowed()
+@@ -538,14 +538,14 @@ public class BiometricsUnlockControllerTest extends SysuiTestCase {
+     }
+ 
+     private void givenFingerprintModeUnlockCollapsing() {
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+         when(mUpdateMonitor.isDeviceInteractive()).thenReturn(true);
+         when(mKeyguardStateController.isShowing()).thenReturn(true);
+     }
+ 
+     private void givenDreamingLocked() {
+         when(mUpdateMonitor.isDreaming()).thenReturn(true);
+-        when(mUpdateMonitor.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(true);
++        when(mUpdateMonitor.isUnlockingWithBiometricAllowedSafe(anyBoolean())).thenReturn(true);
+     }
+     @Test
+     public void onSideFingerprintSuccess_dreaming_unlockNoWake() {
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java b/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
+index b88885423..089e3048a 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
+@@ -1438,8 +1438,8 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
+     public boolean getUserUnlockedWithBiometric(int userId) {
+         BiometricAuthenticated fingerprint = mUserFingerprintAuthenticated.get(userId);
+         boolean fingerprintAllowed = fingerprint != null && fingerprint.mAuthenticated
+-                && isUnlockingWithBiometricAllowed(fingerprint.mIsStrongBiometric);
+-        boolean unlockedByFace = isCurrentUserUnlockedWithFace() && isUnlockingWithBiometricAllowed(
++                && isUnlockingWithBiometricAllowedSafe(fingerprint.mIsStrongBiometric);
++        boolean unlockedByFace = isCurrentUserUnlockedWithFace() && isUnlockingWithBiometricAllowedSafe(
+                 FACE);
+         return fingerprintAllowed || unlockedByFace;
+     }
+@@ -1463,7 +1463,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
+         BiometricAuthenticated fingerprint = mUserFingerprintAuthenticated.get(userId);
+         // fingerprint always bypasses
+         boolean fingerprintAllowed = fingerprint != null && fingerprint.mAuthenticated
+-                && isUnlockingWithBiometricAllowed(fingerprint.mIsStrongBiometric);
++                && isUnlockingWithBiometricAllowedSafe(fingerprint.mIsStrongBiometric);
+         return fingerprintAllowed || (isCurrentUserUnlockedWithFace()
+                 && mKeyguardBypassController.canBypass());
+     }
+@@ -1526,14 +1526,21 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
+     }
+ 
+     private boolean isUnlockingWithTrustAgentAllowed() {
+-        return isUnlockingWithBiometricAllowed(true);
++        return isUnlockingWithBiometricAllowedSafe(true);
+     }
+ 
+     private boolean isUnlockingWithForceKeyguardDismissibleAllowed() {
+-        return isUnlockingWithBiometricAllowed(false);
++        return isUnlockingWithBiometricAllowedSafe(false);
+     }
+ 
+-    public boolean isUnlockingWithBiometricAllowed(boolean isStrongBiometric) {
++    /**
++     * This method has had "Safe" appended to the name that is used upstream, which allows us to
++     * keep track of future callers. This is necessary because this method is often used to check if
++     * unlocking is possible when it is known that a biometric auth has succeeded, which doesn't
++     * take biometric second factor into consideration. We can't modify this method's return value
++     * based on second factor. We would prefer #getUserUnlockedWithBiometric to be used.
++     */
++    public boolean isUnlockingWithBiometricAllowedSafe(boolean isStrongBiometric) {
+         // StrongAuthTracker#isUnlockingWithBiometricAllowed includes
+         // STRONG_AUTH_REQUIRED_AFTER_LOCKOUT which is the same as mFingerprintLockedOutPermanent;
+         // however the strong auth tracker does not include the temporary lockout
+@@ -1560,21 +1567,21 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
+      * Whether fingerprint is allowed ot be used for unlocking based on the strongAuthTracker
+      * and temporary lockout state (tracked by FingerprintManager via error codes).
+      */
+-    public boolean isUnlockingWithFingerprintAllowed() {
+-        return isUnlockingWithBiometricAllowed(FINGERPRINT);
++    public boolean isUnlockingWithFingerprintAllowedSafe() {
++        return isUnlockingWithBiometricAllowedSafe(FINGERPRINT);
+     }
+ 
+     /**
+      * Whether the given biometric is allowed based on strongAuth & lockout states.
+      */
+-    public boolean isUnlockingWithBiometricAllowed(
++    public boolean isUnlockingWithBiometricAllowedSafe(
+             @NonNull BiometricSourceType biometricSourceType) {
+         switch (biometricSourceType) {
+             case FINGERPRINT:
+-                return isUnlockingWithBiometricAllowed(isFingerprintClass3());
++                return isUnlockingWithBiometricAllowedSafe(isFingerprintClass3());
+             case FACE:
+                 return getFaceAuthInteractor() != null
+-                        && isUnlockingWithBiometricAllowed(
++                        && isUnlockingWithBiometricAllowedSafe(
+                         getFaceAuthInteractor().isFaceAuthStrong());
+             default:
+                 return false;
+@@ -2661,7 +2668,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
+         final boolean running = mFingerprintRunningState == BIOMETRIC_STATE_RUNNING;
+         final boolean runningOrRestarting = running
+                 || mFingerprintRunningState == BIOMETRIC_STATE_CANCELLING_RESTARTING;
+-        final boolean runDetect = !isUnlockingWithFingerprintAllowed();
++        final boolean runDetect = !isUnlockingWithFingerprintAllowedSafe();
+ 
+         if (runningOrRestarting && !shouldListenForFingerprint) {
+             if (action == BIOMETRIC_ACTION_START) {
+@@ -4206,7 +4213,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
+                     + mAuthController.areAllFingerprintAuthenticatorsRegistered());
+             pw.println("    allowed="
+                     + (fingerprint != null
+-                            && isUnlockingWithBiometricAllowed(fingerprint.mIsStrongBiometric)));
++                            && isUnlockingWithBiometricAllowedSafe(fingerprint.mIsStrongBiometric)));
+             pw.println("    auth'd=" + (fingerprint != null && fingerprint.mAuthenticated));
+             pw.println("    authSinceBoot="
+                     + getStrongAuthTracker().hasUserAuthenticatedSinceBoot());
+diff --git a/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntrySourceInteractor.kt b/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntrySourceInteractor.kt
+index b2d4405ee..456e73e2a 100644
+--- a/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntrySourceInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntrySourceInteractor.kt
+@@ -126,7 +126,7 @@ constructor(
+                 currentScene,
+                 isShowingBouncerScene ->
+                 val isUnlockingAllowed =
+-                    keyguardUpdateMonitor.isUnlockingWithBiometricAllowed(isFaceStrongBiometric)
++                    keyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(isFaceStrongBiometric)
+                 val bypass = isBypassAvailable || authController.isUdfpsFingerDown()
+ 
+                 when {
+@@ -169,7 +169,7 @@ constructor(
+                 isFingerprintStrongBiometric,
+                 isShowingBouncerScene ->
+                 val unlockingAllowed =
+-                    keyguardUpdateMonitor.isUnlockingWithBiometricAllowed(
++                    keyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(
+                         isFingerprintStrongBiometric
+                     )
+                 when {
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/DeviceEntrySideFpsOverlayInteractor.kt b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/DeviceEntrySideFpsOverlayInteractor.kt
+index 6367b5c2d..ef9b595d4 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/DeviceEntrySideFpsOverlayInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/DeviceEntrySideFpsOverlayInteractor.kt
+@@ -80,7 +80,7 @@ constructor(
+                 isBouncerActive() &&
+                     isSideFpsIndicatorOnPrimaryBouncerEnabled &&
+                     keyguardUpdateMonitor.isFingerprintDetectionRunning &&
+-                    keyguardUpdateMonitor.isUnlockingWithFingerprintAllowed
++                    keyguardUpdateMonitor.isUnlockingWithFingerprintAllowedSafe
+             }
+             .onEach { Log.d(TAG, "showIndicatorForPrimaryBouncer updated: $it") }
+ 
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/util/IndicationHelper.kt b/packages/SystemUI/src/com/android/systemui/keyguard/util/IndicationHelper.kt
+index 712900161..ab8e920b1 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/util/IndicationHelper.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/util/IndicationHelper.kt
+@@ -60,6 +60,6 @@ constructor(
+         // pass true for isStrongBiometric to isUnlockingWithBiometricAllowed() to bypass the
+         // check of whether non-strong biometric is allowed since strong biometrics can still be
+         // used.
+-        return !keyguardUpdateMonitor.isUnlockingWithBiometricAllowed(true /* isStrongBiometric */)
++        return !keyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(true /* isStrongBiometric */)
+     }
+ }
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java b/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java
+index 4bac6d5c1..17c9e2429 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java
+@@ -1541,7 +1541,7 @@ public class KeyguardIndicationController {
+         // pass true for isStrongBiometric to isUnlockingWithBiometricAllowed() to bypass the
+         // check of whether non-strong biometric is allowed since strong biometrics can still be
+         // used.
+-        return !mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowed(
++        return !mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(
+                 true /* isStrongBiometric */);
+     }
+ 
+@@ -1649,7 +1649,7 @@ public class KeyguardIndicationController {
+ 
+     private boolean canUnlockWithFingerprint() {
+         return mKeyguardUpdateMonitor.isUnlockWithFingerprintPossible(
+-                getCurrentUser()) && mKeyguardUpdateMonitor.isUnlockingWithFingerprintAllowed();
++                getCurrentUser()) && mKeyguardUpdateMonitor.isUnlockingWithFingerprintAllowedSafe();
+     }
+ 
+     private void showErrorMessageNowOrLater(String errString, @Nullable String followUpMsg,
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
+index 6f29f618e..8658115ba 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
+@@ -578,7 +578,7 @@ public class BiometricUnlockController extends KeyguardUpdateMonitorCallback imp
+     public boolean hasPendingAuthentication() {
+         return mPendingAuthenticated != null
+                 && mUpdateMonitor
+-                    .isUnlockingWithBiometricAllowed(mPendingAuthenticated.isStrongBiometric)
++                    .isUnlockingWithBiometricAllowedSafe(mPendingAuthenticated.isStrongBiometric)
+                 && mPendingAuthenticated.userId
+                     == mSelectedUserInteractor.get().getSelectedUserId();
+     }
+diff --git a/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java b/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java
+index 839a2bdf5..7319a03ec 100644
+--- a/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java
++++ b/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java
+@@ -920,9 +920,9 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
+         primaryAuthNotRequiredByStrongAuthTracker();
+ 
+         // THEN unlocking with face and fp is allowed
+-        Assert.assertTrue(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowed(
++        Assert.assertTrue(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(
+                 BiometricSourceType.FACE));
+-        Assert.assertTrue(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowed(
++        Assert.assertTrue(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(
+                 BiometricSourceType.FINGERPRINT));
+     }
+ 
+@@ -932,7 +932,7 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
+         when(mStrongAuthTracker.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(false);
+ 
+         // THEN unlocking with face is not allowed
+-        Assert.assertFalse(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowed(
++        Assert.assertFalse(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(
+                 BiometricSourceType.FACE));
+     }
+ 
+@@ -950,7 +950,7 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
+         faceAuthLockOut();
+ 
+         // THEN unlocking with fingerprint is not allowed
+-        Assert.assertFalse(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowed(
++        Assert.assertFalse(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(
+                 BiometricSourceType.FINGERPRINT));
+     }
+ 
+@@ -966,7 +966,7 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
+         faceAuthLockOut();
+ 
+         // THEN unlocking with fingerprint is still allowed
+-        Assert.assertTrue(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowed(
++        Assert.assertTrue(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(
+                 BiometricSourceType.FINGERPRINT));
+     }
+ 
+@@ -976,7 +976,7 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
+         when(mStrongAuthTracker.isUnlockingWithBiometricAllowed(anyBoolean())).thenReturn(false);
+ 
+         // THEN unlocking with fingerprint is not allowed
+-        Assert.assertFalse(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowed(
++        Assert.assertFalse(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(
+                 BiometricSourceType.FINGERPRINT));
+     }
+ 
+@@ -989,7 +989,7 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
+         fingerprintErrorTemporaryLockOut();
+ 
+         // THEN unlocking with fingerprint is not allowed
+-        Assert.assertFalse(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowed(
++        Assert.assertFalse(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(
+                 BiometricSourceType.FINGERPRINT));
+     }
+ 
+@@ -2197,7 +2197,7 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
+         mTestableLooper.processAllMessages();
+ 
+         // THEN unlocking with fingerprint is not allowed
+-        Assert.assertFalse(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowed(
++        Assert.assertFalse(mKeyguardUpdateMonitor.isUnlockingWithBiometricAllowedSafe(
+                 BiometricSourceType.FINGERPRINT));
+ 
+         // THEN fingerprint detect gets called
+-- 
+2.43.0
+

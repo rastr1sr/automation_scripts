@@ -1,4 +1,4 @@
-From 4499ae8b211a2dec1f064aecd79b742618f19132 Mon Sep 17 00:00:00 2001
+From 543e1e949310b11d19bca9e7b09be46213cac028 Mon Sep 17 00:00:00 2001
 From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
 Date: Fri, 3 Jan 2025 12:38:28 +0200
 Subject: [PATCH] SystemUI: don't skip fingerprint auth success haptic when 2FA

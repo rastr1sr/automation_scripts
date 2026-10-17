@@ -1,4 +1,4 @@
-From f4fa71c8e2f6677303ece874eb73798184bc70c3 Mon Sep 17 00:00:00 2001
+From b4ad3bed37ed0c941679d11487c5abc22042b988 Mon Sep 17 00:00:00 2001
 From: Fred Underwood <underwoodfred@proton.me>
 Date: Sun, 22 Dec 2024 06:29:15 +1000
 Subject: [PATCH] add second factor to LockPattern classes
@@ -56,7 +56,7 @@ index 5adbc5831..2757dab83 100644
                      mThrottleTimeout = ex.getTimeoutMs();
                      return false;
 diff --git a/core/java/com/android/internal/widget/LockPatternUtils.java b/core/java/com/android/internal/widget/LockPatternUtils.java
-index a0333b75e..0701c5878 100644
+index 58b97ee60..f809ea9e2 100644
 --- a/core/java/com/android/internal/widget/LockPatternUtils.java
 +++ b/core/java/com/android/internal/widget/LockPatternUtils.java
 @@ -22,8 +22,11 @@ import static android.app.admin.DevicePolicyManager.PASSWORD_QUALITY_NUMERIC;

@@ -1,0 +1,53 @@
+From 2c8ee29c47dc8a670fb877703c2b25f4ac04dbd1 Mon Sep 17 00:00:00 2001
+From: Dmitry Muhomor <muhomor.dmitry@gmail.com>
+Date: Thu, 30 May 2024 16:48:15 +0300
+Subject: [PATCH] allow SYSTEM_UID to call EuiccCardController.resetMemory()
+
+Before this commit, only eUICC LPA was allowed to call that method.
+
+resetMemory() is now used in system_server to wipe eUICCs as part of the duress password feature
+implementation.
+---
+ .../telephony/euicc/EuiccCardController.java    | 17 ++++++++++-------
+ 1 file changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/src/java/com/android/internal/telephony/euicc/EuiccCardController.java b/src/java/com/android/internal/telephony/euicc/EuiccCardController.java
+index e511e8f7f0..9e13182b3c 100644
+--- a/src/java/com/android/internal/telephony/euicc/EuiccCardController.java
++++ b/src/java/com/android/internal/telephony/euicc/EuiccCardController.java
+@@ -33,6 +33,7 @@ import android.content.pm.PackageManager;
+ import android.os.Binder;
+ import android.os.Build;
+ import android.os.Handler;
++import android.os.Process;
+ import android.os.RemoteException;
+ import android.os.SystemProperties;
+ import android.preference.PreferenceManager;
+@@ -708,15 +709,17 @@ public class EuiccCardController extends IEuiccCardController.Stub {
+     @Override
+     public void resetMemory(String callingPackage, String cardId,
+             @EuiccCardManager.ResetOption int options, IResetMemoryCallback callback) {
+-        try {
+-            checkCallingPackage(callingPackage);
+-        } catch (SecurityException se) {
++        if (Binder.getCallingUid() != Process.SYSTEM_UID) {
+             try {
+-                callback.onComplete(EuiccCardManager.RESULT_CALLER_NOT_ALLOWED);
+-            } catch (RemoteException re) {
+-                loge("callback onComplete failure after checkCallingPackage.", re);
++                checkCallingPackage(callingPackage);
++            } catch (SecurityException se) {
++                try {
++                    callback.onComplete(EuiccCardManager.RESULT_CALLER_NOT_ALLOWED);
++                } catch (RemoteException re) {
++                    loge("callback onComplete failure after checkCallingPackage.", re);
++                }
++                return;
+             }
+-            return;
+         }
+ 
+         enforceTelephonyFeatureWithException(callingPackage, "resetMemory");
+-- 
+2.43.0
+

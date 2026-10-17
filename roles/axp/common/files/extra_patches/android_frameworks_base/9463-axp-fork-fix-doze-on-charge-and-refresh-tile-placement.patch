@@ -1,0 +1,60 @@
+From c4909066d2b61813c04cb5e351ad8ff4b260e68d Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Sat, 17 Oct 2026 00:08:32 +0000
+Subject: [PATCH] fix fuzzed placements: DOZE_ON_CHARGE in Settings.Secure,
+ RefreshRateTile binding inside LineageModule
+
+---
+ core/java/android/provider/Settings.java              | 11 ++++++-----
+ .../src/com/android/systemui/lineage/LineageModule.kt |  4 ++--
+ 2 files changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index c31863121..1f3f3685e 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -12988,6 +12988,12 @@ public final class Settings {
+          */
+         public static final String CLIPBOARD_AUTO_CLEAR_TIMEOUT = "clipboard_auto_clear_timeout";
+ 
++        /**
++         * Whether to enable DOZE only when charging
++         * @hide
++         */
++        public static final String DOZE_ON_CHARGE = "doze_on_charge";
++
+         /**
+          * Whether to show an overlay in the bottom corner of the screen on copying stuff
+          * into the clipboard.
+@@ -13572,11 +13578,6 @@ public final class Settings {
+         @Readable
+         public static final String POWER_SOUNDS_ENABLED = "power_sounds_enabled";
+ 
+-        /**
+-         * Whether to enable DOZE only when charging
+-         * @hide
+-         */
+-        public static final String DOZE_ON_CHARGE = "doze_on_charge";
+ 
+         /**
+          * URI for the "wireless charging started" sound.
+diff --git a/packages/SystemUI/src/com/android/systemui/lineage/LineageModule.kt b/packages/SystemUI/src/com/android/systemui/lineage/LineageModule.kt
+index a40d0c76d..dfc929158 100644
+--- a/packages/SystemUI/src/com/android/systemui/lineage/LineageModule.kt
++++ b/packages/SystemUI/src/com/android/systemui/lineage/LineageModule.kt
+@@ -109,10 +109,10 @@ interface LineageModule {
+     @IntoMap
+     @StringKey(WifiTile.TILE_SPEC)
+     fun bindWifiTile(wifiTile: WifiTile): QSTileImpl<*>
+-}
++
+     /** Inject RefreshRateTile into tileMap in QSModule */
+     @Binds
+     @IntoMap
+     @StringKey(RefreshRateTile.TILE_SPEC)
+     fun bindRefreshRateTile(refreshRateTile: RefreshRateTile): QSTileImpl<*>
+-
++}
+-- 
+2.43.0
+

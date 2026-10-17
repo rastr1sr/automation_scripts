@@ -1,0 +1,45 @@
+From 75b085c240cbe9f95c752b807cf56e56cda31410 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Sat, 17 Oct 2026 01:23:56 +0000
+Subject: [PATCH] Settings: fix stranded strings_ext entries, add
+ scramble_pin_title
+
+Fuzzed hunks of the Private Space/clipboard ports appended strings after </resources>; the 2FA PIN screen uses GrapheneOS' scramble_pin_title.
+---
+ res/values/calyx_strings.xml | 2 ++
+ res/values/strings_ext.xml   | 4 ++--
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/res/values/calyx_strings.xml b/res/values/calyx_strings.xml
+index 238f5c0a..c2657538 100644
+--- a/res/values/calyx_strings.xml
++++ b/res/values/calyx_strings.xml
+@@ -64,4 +64,6 @@ Duress PIN works the same way duress password does."</string>
+     <string name="doze_on_charge_title">Always-on display only while charging</string>
+     <string name="doze_on_charge_summary">Show time and info on the lock screen only while the phone is plugged in</string>
+     <string name="screenshot_shutter_sound_title">Screenshot sound</string>
++    <!-- AXP fork: 2FA second factor PIN settings (GrapheneOS string name) -->
++    <string name="scramble_pin_title">Scramble PIN layout</string>
+ </resources>
+diff --git a/res/values/strings_ext.xml b/res/values/strings_ext.xml
+index a0c26459..b299ea13 100644
+--- a/res/values/strings_ext.xml
++++ b/res/values/strings_ext.xml
+@@ -21,7 +21,7 @@
+     <string name="allow_automatic_per_app_epcm_summary">
+ "Allow automatically disabling exploit protections for apps that are known to need it"
+     </string>
+-</resources>
++
+     <string name="ps_disallow_delayed_locking_title">End session immediately on lock</string>
+     <string name="ps_disallow_delayed_locking_description">
+         Disallow delayed locking of storage when stopping or locking the current private profile.
+@@ -45,4 +45,4 @@
+         will not be accessible. Clipboard contents shared with other profiles prior to selecting a
+         stricter option remain accessible until clipboard contents have been updated.
+     </string>
+-
++</resources>
+-- 
+2.43.0
+

@@ -1,0 +1,24 @@
+From 4017f1cbe40a436a52867dee0a1c8819e751dc38 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Sat, 17 Oct 2026 04:57:08 +0000
+Subject: [PATCH] allow init to write kernel.deny_new_usb
+
+The security.deny_new_usb property trigger in init.rc writes /proc/sys/kernel/deny_new_usb (labeled proc_deny_new_usb here).
+
+Change-Id: I49f9a984adc8f4e14f2ddf2938d73ff088dc895f
+---
+ common/dynamic/init.te | 2 ++
+ 1 file changed, 2 insertions(+)
+ create mode 100644 common/dynamic/init.te
+
+diff --git a/common/dynamic/init.te b/common/dynamic/init.te
+new file mode 100644
+index 0000000..c35673c
+--- /dev/null
++++ b/common/dynamic/init.te
+@@ -0,0 +1,2 @@
++# AXP fork: init writes kernel.deny_new_usb from the security.deny_new_usb property trigger
++allow init proc_deny_new_usb:file w_file_perms;
+-- 
+2.43.0
+

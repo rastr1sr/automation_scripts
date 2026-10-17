@@ -1,0 +1,134 @@
+From 12878e6403472b109326f065442cb461349827ff Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Sat, 17 Oct 2026 03:13:33 +0000
+Subject: [PATCH] Settings: fit GrapheneOS duress/2FA/private space code to
+ this tree
+
+Bundle getBoolean2/getNumber -> getBoolean/getInt, static import LockDomain.Primary, drop the second factor scramble switch (SystemUI uses Lineage's single PIN scramble setting), private space controllers get a per-user context instead of the newer per-user constructor.
+
+Change-Id: I35fdebf54ba501398627ef173796dadd45c4a817
+---
+ res/xml/biometric_second_factor_pin_settings.xml         | 4 ----
+ .../users/PsCrossProfileClipboardAccessPrefCtrl.java     | 9 +++++++--
+ .../users/PsDisallowDelayedLockingPrefController.java    | 8 ++++++--
+ .../settings/security/DuressPasswordMainActivity.java    | 2 +-
+ .../settings/security/DuressPasswordSetupActivity.java   | 2 +-
+ .../screenlock/BiometricSecondFactorPinSettings.java     | 1 -
+ .../settings/security/screenlock/ScreenLockSettings.java | 2 ++
+ 7 files changed, 17 insertions(+), 11 deletions(-)
+
+diff --git a/res/xml/biometric_second_factor_pin_settings.xml b/res/xml/biometric_second_factor_pin_settings.xml
+index 4fca3a8..837ba31 100644
+--- a/res/xml/biometric_second_factor_pin_settings.xml
++++ b/res/xml/biometric_second_factor_pin_settings.xml
+@@ -18,10 +18,6 @@
+     <PreferenceCategory
+         android:title="@string/biometric_second_factor_pin_settings_category_title">
+ 
+-        <SwitchPreferenceCompat
+-            android:key="scramble_pin_layout"
+-            android:title="@string/scramble_pin_title" />
+-
+         <SwitchPreferenceCompat
+             android:key="enhancedPinPrivacy"
+             android:title="@string/lockpattern_settings_enhanced_pin_privacy_title"
+diff --git a/src/com/android/settings/privatespace/users/PsCrossProfileClipboardAccessPrefCtrl.java b/src/com/android/settings/privatespace/users/PsCrossProfileClipboardAccessPrefCtrl.java
+index 666cecf..aea2f67 100644
+--- a/src/com/android/settings/privatespace/users/PsCrossProfileClipboardAccessPrefCtrl.java
++++ b/src/com/android/settings/privatespace/users/PsCrossProfileClipboardAccessPrefCtrl.java
+@@ -2,6 +2,7 @@ package com.android.settings.privatespace.users;
+ 
+ import android.content.Context;
+ import android.ext.settings.IntSetting;
++import android.os.UserHandle;
+ 
+ import androidx.preference.PreferenceScreen;
+ 
+@@ -16,8 +17,12 @@ public class PsCrossProfileClipboardAccessPrefCtrl extends IntSettingPrefControl
+ 
+ 
+     public PsCrossProfileClipboardAccessPrefCtrl(Context ctx, String key) {
+-        super(ctx, key, CROSS_PROFILE_CLIPBOARD_ACCESS_SETTINGS,
+-                PrivateSpaceMaintainer.getInstance(ctx).getPrivateProfileHandle());
++        super(psContext(ctx), key, CROSS_PROFILE_CLIPBOARD_ACCESS_SETTINGS);
++    }
++
++    private static Context psContext(Context ctx) {
++        UserHandle ps = PrivateSpaceMaintainer.getInstance(ctx).getPrivateProfileHandle();
++        return ps == null ? ctx : ctx.createContextAsUser(ps, 0);
+     }
+ 
+     @Override
+diff --git a/src/com/android/settings/privatespace/users/PsDisallowDelayedLockingPrefController.java b/src/com/android/settings/privatespace/users/PsDisallowDelayedLockingPrefController.java
+index 3276fd3..9ed142b 100644
+--- a/src/com/android/settings/privatespace/users/PsDisallowDelayedLockingPrefController.java
++++ b/src/com/android/settings/privatespace/users/PsDisallowDelayedLockingPrefController.java
+@@ -16,8 +16,12 @@ public class PsDisallowDelayedLockingPrefController extends BoolSettingPrefContr
+     private static final String TAG = "PsDisallowDelayedLockingPrefCtrl";
+ 
+     public PsDisallowDelayedLockingPrefController(Context ctx, String key) {
+-        super(ctx, key, ExtSettings.DISALLOW_DELAYED_LOCKING_ON_USER_STOP,
+-                PrivateSpaceMaintainer.getInstance(ctx).getPrivateProfileHandle());
++        super(psContext(ctx), key, ExtSettings.DISALLOW_DELAYED_LOCKING_ON_USER_STOP);
++    }
++
++    private static Context psContext(Context ctx) {
++        UserHandle ps = PrivateSpaceMaintainer.getInstance(ctx).getPrivateProfileHandle();
++        return ps == null ? ctx : ctx.createContextAsUser(ps, 0);
+     }
+ 
+     @Override
+diff --git a/src/com/android/settings/security/DuressPasswordMainActivity.java b/src/com/android/settings/security/DuressPasswordMainActivity.java
+index e99f38e..e946876 100644
+--- a/src/com/android/settings/security/DuressPasswordMainActivity.java
++++ b/src/com/android/settings/security/DuressPasswordMainActivity.java
+@@ -47,7 +47,7 @@ public class DuressPasswordMainActivity extends DuressPasswordActivity implement
+ 
+         if (savedInstanceState != null) {
+             userCredential = savedInstanceState.getParcelable(KEY_USER_CREDENTIAL, LockscreenCredential.class);
+-            askedForUserCredentials = requireNonNull(savedInstanceState.getBoolean2(KEY_HAS_ASKED_FOR_USER_CREDENTIALS));
++            askedForUserCredentials = savedInstanceState.getBoolean(KEY_HAS_ASKED_FOR_USER_CREDENTIALS);
+         }
+     }
+ 
+diff --git a/src/com/android/settings/security/DuressPasswordSetupActivity.java b/src/com/android/settings/security/DuressPasswordSetupActivity.java
+index 9cedb11..242e16c 100644
+--- a/src/com/android/settings/security/DuressPasswordSetupActivity.java
++++ b/src/com/android/settings/security/DuressPasswordSetupActivity.java
+@@ -69,7 +69,7 @@ public class DuressPasswordSetupActivity extends DuressPasswordActivity
+         setContentView(R.layout.duress_password_setup);
+ 
+         GlifLayout layout = requireViewById(R.id.glif_layout);
+-        int headerText = getIntent().getExtras().getNumber(EXTRA_TITLE_TEXT);
++        int headerText = getIntent().getExtras().getInt(EXTRA_TITLE_TEXT);
+         isUpdate = headerText == R.string.duress_pwd_action_update;
+         layout.setHeaderText(headerText);
+         adjustDescriptionStyle(layout);
+diff --git a/src/com/android/settings/security/screenlock/BiometricSecondFactorPinSettings.java b/src/com/android/settings/security/screenlock/BiometricSecondFactorPinSettings.java
+index 832d08a..7053c29 100644
+--- a/src/com/android/settings/security/screenlock/BiometricSecondFactorPinSettings.java
++++ b/src/com/android/settings/security/screenlock/BiometricSecondFactorPinSettings.java
+@@ -89,7 +89,6 @@ public class BiometricSecondFactorPinSettings extends DashboardFragment
+         final List<AbstractPreferenceController> controllers = new ArrayList<>();
+         controllers.add(new PinPrivacyPreferenceController(context, userId,
+                 new WrappedLockPatternUtils(lockPatternUtils, Secondary)));
+-        controllers.add(new PinScramblingPrefController(context, Secondary));
+         controllers.add(new DeleteBiometricSecondFactorPinPreferenceController(context, parent,
+                 userId, primaryCredential));
+         controllers.add(new ChangeBiometricSecondFactorPinPreferenceController(context, parent,
+diff --git a/src/com/android/settings/security/screenlock/ScreenLockSettings.java b/src/com/android/settings/security/screenlock/ScreenLockSettings.java
+index 2ee0237..75a3f62 100644
+--- a/src/com/android/settings/security/screenlock/ScreenLockSettings.java
++++ b/src/com/android/settings/security/screenlock/ScreenLockSettings.java
+@@ -16,6 +16,8 @@
+ 
+ package com.android.settings.security.screenlock;
+ 
++import static com.android.internal.widget.LockDomain.Primary;
++
+ import android.app.Activity;
+ import android.app.settings.SettingsEnums;
+ import android.content.Context;
+-- 
+2.43.0
+

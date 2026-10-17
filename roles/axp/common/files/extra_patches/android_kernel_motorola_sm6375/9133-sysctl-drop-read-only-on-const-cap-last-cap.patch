@@ -1,0 +1,26 @@
+From 897d06de30df87f7b0aa5e86f81c414bd507a975 Mon Sep 17 00:00:00 2001
+From: AXP-fork <noreply@localhost>
+Date: Sat, 17 Oct 2026 01:49:20 +0000
+Subject: [PATCH] sysctl: cap_last_cap is const already; __read_only on it
+ causes a section type conflict
+
+---
+ kernel/sysctl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index 159649ebf..170316a68 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -174,7 +174,7 @@ static int maxolduid = 65535;
+ static int minolduid;
+ 
+ static int ngroups_max = NGROUPS_MAX;
+-static const int cap_last_cap __read_only = CAP_LAST_CAP;
++static const int cap_last_cap = CAP_LAST_CAP;
+ 
+ /*
+  * This is needed for proc_doulongvec_minmax of sysctl_hung_task_timeout_secs
+-- 
+2.43.0
+
